@@ -1,0 +1,50 @@
+// BPM DSL Grammar for Lark parser
+
+?start: process
+
+process: "process" STRING "{" process_body "}"
+
+process_body: process_metadata* element* flow_section?
+
+process_metadata: process_id
+                | process_version
+
+process_id: "id:" STRING
+process_version: "version:" STRING
+
+element: start_element
+       | end_element  
+       | script_call
+       | xor_gateway
+
+start_element: "start" STRING "{" start_properties "}"
+start_properties: element_id
+
+end_element: "end" STRING "{" end_properties "}"
+end_properties: element_id
+
+script_call: "scriptCall" STRING "{" script_properties "}"
+script_properties: element_id script_code input_vars? output_vars?
+
+xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
+gateway_properties: element_id gateway_condition?
+
+element_id: "id:" STRING
+script_code: "script:" STRING
+input_vars: "inputVars:" string_array
+output_vars: "outputVars:" string_array
+gateway_condition: "condition:" STRING
+
+flow_section: "flow" "{" flow_definition* "}"
+flow_definition: STRING "->" STRING flow_condition?
+flow_condition: "[" "condition:" STRING "]"
+
+string_array: "[" (STRING ("," STRING)*)? "]"
+
+// Terminals
+STRING: /"[^"]*"/
+COMMENT: /\/\/[^\n]*/
+
+%import common.WS
+%ignore WS
+%ignore COMMENT

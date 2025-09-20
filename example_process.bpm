@@ -1,0 +1,58 @@
+process "Order Processing" {
+    id: "order-process"
+    version: "1.0"
+    
+    // Start event
+    start "Order Received" {
+        id: "start-order"
+    }
+    
+    // Script task for validation
+    scriptCall "Validate Order" {
+        id: "validate-order"
+        script: "validateOrderData(order)"
+        inputVars: ["order"]
+        outputVars: ["isValid", "validationErrors"]
+    }
+    
+    // XOR Gateway for decision
+    xorGateway "Order Valid?" {
+        id: "order-valid-gateway"
+        condition: "isValid == true"
+    }
+    
+    // Script task for processing valid orders
+    scriptCall "Process Order" {
+        id: "process-order"
+        script: "processValidOrder(order)"
+        inputVars: ["order"]
+        outputVars: ["processedOrder", "orderNumber"]
+    }
+    
+    // Script task for handling invalid orders
+    scriptCall "Handle Invalid Order" {
+        id: "handle-invalid"
+        script: "handleInvalidOrder(order, validationErrors)"
+        inputVars: ["order", "validationErrors"]
+        outputVars: ["rejectionReason"]
+    }
+    
+    // End events
+    end "Order Processed" {
+        id: "end-processed"
+    }
+    
+    end "Order Rejected" {
+        id: "end-rejected"
+    }
+    
+    // Flow definitions
+    flow {
+        "start-order" -> "validate-order"
+        "validate-order" -> "order-valid-gateway"
+        "order-valid-gateway" -> "process-order" [condition: "isValid == true"]
+        "order-valid-gateway" -> "handle-invalid" [condition: "isValid == false"]
+        "process-order" -> "end-processed"
+        "handle-invalid" -> "end-rejected"
+    }
+}
