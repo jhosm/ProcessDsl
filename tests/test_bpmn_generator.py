@@ -55,7 +55,8 @@ class TestBPMNGenerator:
         assert bpmn_process.get('id') == 'simple-process'
         assert bpmn_process.get('name') == 'Simple Process'
         assert bpmn_process.get('isExecutable') == 'true'
-        assert bpmn_process.get('versionTag') == '1.0'
+        # versionTag is not part of BPMN 2.0 standard - removed for compatibility
+        # assert bpmn_process.get('versionTag') == '1.0'
         
         # Check for start event
         start_events = [elem for elem in bpmn_process if elem.tag.endswith('startEvent')]
