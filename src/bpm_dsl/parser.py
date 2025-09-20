@@ -95,7 +95,8 @@ class BPMTransformer(Transformer):
             id=properties['id'],
             script=properties['script'],
             input_vars=properties.get('input_vars', []),
-            output_vars=properties.get('output_vars', [])
+            output_vars=properties.get('output_vars', []),
+            result_variable=properties.get('result_variable')
         )
     
     @v_args(inline=True)
@@ -150,6 +151,11 @@ class BPMTransformer(Transformer):
     def output_vars(self, vars_list: List[str]) -> dict:
         """Extract output variables."""
         return {'output_vars': vars_list}
+    
+    @v_args(inline=True)
+    def result_variable(self, result_var: str) -> dict:
+        """Extract result variable."""
+        return {'result_variable': result_var}
     
     @v_args(inline=True)
     def gateway_condition(self, condition: str) -> dict:

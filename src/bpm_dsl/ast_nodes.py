@@ -52,12 +52,15 @@ class ScriptCall(Element):
     script: str
     input_vars: Optional[List[str]] = None
     output_vars: Optional[List[str]] = None
+    result_variable: Optional[str] = None
     
     def __post_init__(self):
         if self.input_vars is None:
             self.input_vars = []
         if self.output_vars is None:
             self.output_vars = []
+        if self.result_variable is None:
+            self.result_variable = "result"  # Default value for backward compatibility
 
 
 @dataclass

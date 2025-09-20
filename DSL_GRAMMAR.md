@@ -25,6 +25,7 @@ script_properties = "id:" STRING
                    "script:" STRING
                    ("inputVars:" string_array)?
                    ("outputVars:" string_array)?
+                   ("resultVariable:" STRING)?
 
 xor_gateway = "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties = "id:" STRING
@@ -58,9 +59,12 @@ STRING = '"' [^"]* '"'
       script: "javascript_expression"
       inputVars: ["var1", "var2"]
       outputVars: ["result1", "result2"]
+      resultVariable: "scriptResult"
   }
   ```
 - **Purpose**: Executes a script/expression
+- **Properties**:
+  - `resultVariable`: Optional. Variable name to store the script result (defaults to "result")
 - **BPMN Mapping**: `<bpmn:scriptTask>` with Zeebe script job type
 
 ### 4. XOR Gateway

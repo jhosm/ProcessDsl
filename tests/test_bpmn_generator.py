@@ -131,7 +131,7 @@ class TestBPMNGenerator:
         
         assert len(zeebe_scripts) == 1
         zeebe_script = zeebe_scripts[0]
-        assert zeebe_script.get('expression') == 'processData(input)'
+        assert zeebe_script.get('expression') == '=processData(input)'  # FEEL expression format
     
     def test_xor_gateway_generation(self):
         """Test generating BPMN for XOR gateways."""

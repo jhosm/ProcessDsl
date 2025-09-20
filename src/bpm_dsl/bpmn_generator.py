@@ -27,6 +27,26 @@ class BPMNGenerator:
         
         # Don't register namespaces - handle them manually to avoid duplicates
     
+    def _ensure_feel_expression(self, expression: str) -> str:
+        """Ensure expression starts with '=' for FEEL compatibility and convert operators."""
+        if not expression:
+            return expression
+            
+        # Don't modify if already a FEEL expression
+        if expression.startswith('='):
+            return expression
+            
+        # Convert JavaScript-style operators to FEEL operators
+        feel_expression = expression
+        # Convert == to = for FEEL equality
+        feel_expression = feel_expression.replace(' == ', ' = ')
+        # Convert != to != (this should be fine in FEEL, but let's be explicit)
+        feel_expression = feel_expression.replace(' != ', ' != ')
+        # Convert single quotes to double quotes for FEEL string literals
+        feel_expression = feel_expression.replace("'", '"')
+        
+        return f'={feel_expression}'
+    
     def generate(self, process: Process) -> str:
         """Generate BPMN XML from a Process AST."""
         definitions = self._create_definitions(process)
@@ -103,8 +123,9 @@ class BPMNGenerator:
         
         # Add Zeebe script definition
         zeebe_script = SubElement(extension_elements, "zeebe:script")
-        zeebe_script.set("expression", script.script)
-        zeebe_script.set("resultVariable", "result")
+        # The XML library will automatically escape quotes in attributes
+        zeebe_script.set("expression", self._ensure_feel_expression(script.script))
+        zeebe_script.set("resultVariable", script.result_variable)
         
         # Add input/output variable mappings if specified
         if script.input_vars or script.output_vars:
@@ -113,13 +134,13 @@ class BPMNGenerator:
             # Input mappings
             for var in script.input_vars:
                 input_param = SubElement(io_mapping, "zeebe:input")
-                input_param.set("source", var)
+                input_param.set("source", self._ensure_feel_expression(var))
                 input_param.set("target", var)
             
             # Output mappings  
             for var in script.output_vars:
                 output_param = SubElement(io_mapping, "zeebe:output")
-                output_param.set("source", var)
+                output_param.set("source", self._ensure_feel_expression(var))
                 output_param.set("target", var)
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
@@ -144,7 +165,7 @@ class BPMNGenerator:
             if flow.condition:
                 condition_expr = SubElement(sequence_flow, "conditionExpression")
                 condition_expr.set("xsi:type", "tFormalExpression")
-                condition_expr.text = flow.condition
+                condition_expr.text = self._ensure_feel_expression(flow.condition)
     
     def _add_diagram(self, definitions: Element, process: Process) -> None:
         """Add basic BPMN diagram information for visualization."""
@@ -195,7 +216,12 @@ class BPMNGenerator:
         """Convert XML element to pretty-printed string."""
         rough_string = tostring(element, encoding='unicode')
         reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ").replace('<?xml version="1.0" ?>\n', '')
+        pretty_xml = reparsed.toprettyxml(indent="  ").replace('<?xml version="1.0" ?>\n', '')
+        
+        # Don't convert &quot; back to quotes - they need to stay escaped in XML attributes
+        # The FEEL engine will handle the escaped quotes correctly
+        
+        return pretty_xml
     
     def save_to_file(self, process: Process, file_path: str) -> None:
         """Generate BPMN XML and save to file."""

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_demo-process" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
+  <process id="demo-process" name="Demo Process" isExecutable="true">
+    <startEvent id="start-1" name="Start Demo"/>
+    <scriptTask id="process-1" name="Process Data">
+      <extensionElements>
+        <zeebe:script expression="=&quot;success&quot;" resultVariable="status"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=userData" target="userData"/>
+          <zeebe:output source="=processedData" target="processedData"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <exclusiveGateway id="gateway-1" name="Check Status"/>
+    <endEvent id="end-success" name="Success"/>
+    <endEvent id="end-failure" name="Failure"/>
+    <sequenceFlow id="flow_start-1_to_process-1" sourceRef="start-1" targetRef="process-1"/>
+    <sequenceFlow id="flow_process-1_to_gateway-1" sourceRef="process-1" targetRef="gateway-1"/>
+    <sequenceFlow id="flow_gateway-1_to_end-success" sourceRef="gateway-1" targetRef="end-success">
+      <conditionExpression xsi:type="tFormalExpression">=status = &quot;success&quot;</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_gateway-1_to_end-failure" sourceRef="gateway-1" targetRef="end-failure">
+      <conditionExpression xsi:type="tFormalExpression">=status != &quot;success&quot;</conditionExpression>
+    </sequenceFlow>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram_demo-process">
+    <bpmndi:BPMNPlane id="plane_demo-process" bpmnElement="demo-process">
+      <bpmndi:BPMNShape id="shape_start-1" bpmnElement="start-1">
+        <dc:Bounds x="100" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_process-1" bpmnElement="process-1">
+        <dc:Bounds x="250" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gateway-1" bpmnElement="gateway-1">
+        <dc:Bounds x="400" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end-success" bpmnElement="end-success">
+        <dc:Bounds x="550" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end-failure" bpmnElement="end-failure">
+        <dc:Bounds x="700" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_start-1_to_process-1" bpmnElement="flow_start-1_to_process-1">
+        <di:waypoint x="200" y="140"/>
+        <di:waypoint x="250" y="140"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_process-1_to_gateway-1" bpmnElement="flow_process-1_to_gateway-1">
+        <di:waypoint x="200" y="140"/>
+        <di:waypoint x="250" y="140"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_gateway-1_to_end-success" bpmnElement="flow_gateway-1_to_end-success">
+        <di:waypoint x="200" y="140"/>
+        <di:waypoint x="250" y="140"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_gateway-1_to_end-failure" bpmnElement="flow_gateway-1_to_end-failure">
+        <di:waypoint x="200" y="140"/>
+        <di:waypoint x="250" y="140"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

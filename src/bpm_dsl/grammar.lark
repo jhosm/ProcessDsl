@@ -24,7 +24,7 @@ end_element: "end" STRING "{" end_properties "}"
 end_properties: element_id
 
 script_call: "scriptCall" STRING "{" script_properties "}"
-script_properties: element_id script_code input_vars? output_vars?
+script_properties: element_id script_code input_vars? output_vars? result_variable?
 
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties: element_id gateway_condition?
@@ -33,6 +33,7 @@ element_id: "id:" STRING
 script_code: "script:" STRING
 input_vars: "inputVars:" string_array
 output_vars: "outputVars:" string_array
+result_variable: "resultVariable:" STRING
 gateway_condition: "condition:" STRING
 
 flow_section: "flow" "{" flow_definition* "}"

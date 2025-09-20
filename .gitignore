@@ -158,12 +158,6 @@ cython_debug/
 #  project, it is recommended to uncomment the following lines:
 #.idea/
 
-# BPM DSL specific
-*.bpmn
-demo_process.bpmn
-test_simple.bpm
-example_output.bpmn
-
 # IDE
 .vscode/
 .idea/

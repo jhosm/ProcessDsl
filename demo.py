@@ -37,9 +37,10 @@ def demo_parser():
         
         scriptCall "Process Data" {
             id: "process-1"
-            script: "processUserData(userData)"
+            script: "'success'"
             inputVars: ["userData"]
-            outputVars: ["processedData", "status"]
+            outputVars: ["processedData"]
+            resultVariable: "status"
         }
         
         xorGateway "Check Status" {
@@ -84,6 +85,8 @@ def demo_parser():
                     print(f"      Input vars: {element.input_vars}")
                 if element.output_vars:
                     print(f"      Output vars: {element.output_vars}")
+                if element.result_variable:
+                    print(f"      Result variable: {element.result_variable}")
         
         print("\n🔄 Process Flows:")
         for i, flow in enumerate(process.flows, 1):
