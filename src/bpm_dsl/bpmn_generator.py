@@ -21,7 +21,8 @@ class BPMNGenerator:
             'bpmndi': 'http://www.omg.org/spec/BPMN/20100524/DI',
             'dc': 'http://www.omg.org/spec/DD/20100524/DC',
             'di': 'http://www.omg.org/spec/DD/20100524/DI',
-            'zeebe': 'http://camunda.org/schema/zeebe/1.0'
+            'zeebe': 'http://camunda.org/schema/zeebe/1.0',
+            'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
         }
         
         # Don't register namespaces - handle them manually to avoid duplicates
@@ -33,27 +34,28 @@ class BPMNGenerator:
     
     def _create_definitions(self, process: Process) -> Element:
         """Create the BPMN definitions element."""
-        # Create root definitions element
-        definitions = Element(f"{{{self.namespaces['bpmn']}}}definitions")
+        # Create root definitions element without namespace prefix to avoid auto-prefixing
+        definitions = Element("definitions")
         definitions.set("id", f"definitions_{process.id}")
         definitions.set("targetNamespace", "http://bpmn.io/schema/bpmn")
         definitions.set("exporter", "BPM DSL")
         definitions.set("exporterVersion", "1.0")
         
-        # Set default namespace and add other namespace declarations
+        # Set all namespace declarations manually
         definitions.set("xmlns", self.namespaces['bpmn'])
         for prefix, uri in self.namespaces.items():
             if prefix != 'bpmn':
                 definitions.set(f"xmlns:{prefix}", uri)
         
         # Create process element
-        bpmn_process = SubElement(definitions, f"{{{self.namespaces['bpmn']}}}process")
+        bpmn_process = SubElement(definitions, "process")
         bpmn_process.set("id", process.id)
         bpmn_process.set("name", process.name)
         bpmn_process.set("isExecutable", "true")
         
-        if process.version:
-            bpmn_process.set("versionTag", process.version)
+        # Version is handled via Zeebe deployment, not as BPMN attribute
+        # if process.version:
+        #     # versionTag is not part of BPMN 2.0 standard
         
         # Add process elements
         self._add_elements(bpmn_process, process.elements)
@@ -80,60 +82,59 @@ class BPMNGenerator:
     
     def _add_start_event(self, parent: Element, start: StartEvent) -> None:
         """Add a start event to the process."""
-        start_event = SubElement(parent, f"{{{self.namespaces['bpmn']}}}startEvent")
+        start_event = SubElement(parent, "startEvent")
         start_event.set("id", start.id)
         start_event.set("name", start.name)
     
     def _add_end_event(self, parent: Element, end: EndEvent) -> None:
         """Add an end event to the process."""
-        end_event = SubElement(parent, f"{{{self.namespaces['bpmn']}}}endEvent")
+        end_event = SubElement(parent, "endEvent")
         end_event.set("id", end.id)
         end_event.set("name", end.name)
     
     def _add_script_task(self, parent: Element, script: ScriptCall) -> None:
         """Add a script task to the process."""
-        script_task = SubElement(parent, f"{{{self.namespaces['bpmn']}}}scriptTask")
+        script_task = SubElement(parent, "scriptTask")
         script_task.set("id", script.id)
         script_task.set("name", script.name)
         
         # Add Zeebe extension elements
-        extension_elements = SubElement(script_task, f"{{{self.namespaces['bpmn']}}}extensionElements")
+        extension_elements = SubElement(script_task, "extensionElements")
         
         # Add Zeebe script definition
-        zeebe_script = SubElement(extension_elements, f"{{{self.namespaces['zeebe']}}}script")
+        zeebe_script = SubElement(extension_elements, "zeebe:script")
         zeebe_script.set("expression", script.script)
         zeebe_script.set("resultVariable", "result")
         
         # Add input/output variable mappings if specified
         if script.input_vars or script.output_vars:
-            io_mapping = SubElement(extension_elements, f"{{{self.namespaces['zeebe']}}}ioMapping")
+            io_mapping = SubElement(extension_elements, "zeebe:ioMapping")
             
             # Input mappings
             for var in script.input_vars:
-                input_param = SubElement(io_mapping, f"{{{self.namespaces['zeebe']}}}input")
+                input_param = SubElement(io_mapping, "zeebe:input")
                 input_param.set("source", var)
                 input_param.set("target", var)
             
             # Output mappings  
             for var in script.output_vars:
-                output_param = SubElement(io_mapping, f"{{{self.namespaces['zeebe']}}}output")
+                output_param = SubElement(io_mapping, "zeebe:output")
                 output_param.set("source", var)
                 output_param.set("target", var)
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
         """Add an exclusive gateway to the process."""
-        xor_gateway = SubElement(parent, f"{{{self.namespaces['bpmn']}}}exclusiveGateway")
+        xor_gateway = SubElement(parent, "exclusiveGateway")
         xor_gateway.set("id", gateway.id)
         xor_gateway.set("name", gateway.name)
         
-        # Set default flow if condition is specified
-        if gateway.condition:
-            xor_gateway.set("default", f"{gateway.id}_default_flow")
+        # Don't set default flow here - it should reference an actual flow
+        # The default flow will be determined by the actual sequence flows
     
     def _add_flows(self, parent: Element, flows: List[Flow]) -> None:
         """Add sequence flows to the process."""
         for flow in flows:
-            sequence_flow = SubElement(parent, f"{{{self.namespaces['bpmn']}}}sequenceFlow")
+            sequence_flow = SubElement(parent, "sequenceFlow")
             flow_id = f"flow_{flow.source_id}_to_{flow.target_id}"
             sequence_flow.set("id", flow_id)
             sequence_flow.set("sourceRef", flow.source_id)
@@ -141,16 +142,16 @@ class BPMNGenerator:
             
             # Add condition expression if specified
             if flow.condition:
-                condition_expr = SubElement(sequence_flow, f"{{{self.namespaces['bpmn']}}}conditionExpression")
-                condition_expr.set(f"{{{self.namespaces['bpmn']}}}type", "tFormalExpression")
+                condition_expr = SubElement(sequence_flow, "conditionExpression")
+                condition_expr.set("xsi:type", "tFormalExpression")
                 condition_expr.text = flow.condition
     
     def _add_diagram(self, definitions: Element, process: Process) -> None:
         """Add basic BPMN diagram information for visualization."""
-        diagram = SubElement(definitions, f"{{{self.namespaces['bpmndi']}}}BPMNDiagram")
+        diagram = SubElement(definitions, "bpmndi:BPMNDiagram")
         diagram.set("id", f"diagram_{process.id}")
         
-        plane = SubElement(diagram, f"{{{self.namespaces['bpmndi']}}}BPMNPlane")
+        plane = SubElement(diagram, "bpmndi:BPMNPlane")
         plane.set("id", f"plane_{process.id}")
         plane.set("bpmnElement", process.id)
         
@@ -162,11 +163,11 @@ class BPMNGenerator:
         spacing = 150
         
         for element in process.elements:
-            shape = SubElement(plane, f"{{{self.namespaces['bpmndi']}}}BPMNShape")
+            shape = SubElement(plane, "bpmndi:BPMNShape")
             shape.set("id", f"shape_{element.id}")
             shape.set("bpmnElement", element.id)
             
-            bounds = SubElement(shape, f"{{{self.namespaces['dc']}}}Bounds")
+            bounds = SubElement(shape, "dc:Bounds")
             bounds.set("x", str(x_pos))
             bounds.set("y", str(y_pos))
             bounds.set("width", str(element_width))
@@ -176,17 +177,17 @@ class BPMNGenerator:
         
         # Add basic edges for flows
         for flow in process.flows:
-            edge = SubElement(plane, f"{{{self.namespaces['bpmndi']}}}BPMNEdge")
+            edge = SubElement(plane, "bpmndi:BPMNEdge")
             flow_id = f"flow_{flow.source_id}_to_{flow.target_id}"
             edge.set("id", f"edge_{flow_id}")
             edge.set("bpmnElement", flow_id)
             
             # Add waypoints (simplified)
-            waypoint1 = SubElement(edge, f"{{{self.namespaces['di']}}}waypoint")
+            waypoint1 = SubElement(edge, "di:waypoint")
             waypoint1.set("x", "200")
             waypoint1.set("y", "140")
             
-            waypoint2 = SubElement(edge, f"{{{self.namespaces['di']}}}waypoint")
+            waypoint2 = SubElement(edge, "di:waypoint")
             waypoint2.set("x", "250")
             waypoint2.set("y", "140")
     
