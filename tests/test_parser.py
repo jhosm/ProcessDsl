@@ -97,8 +97,19 @@ class TestBPMParser:
         assert script_call.name == "Process Data"
         assert script_call.id == "script-1"
         assert script_call.script == "processData(input)"
-        assert script_call.input_vars == ["input", "config"]
-        assert script_call.output_vars == ["result", "status"]
+        # Check that inputVars were converted to input_mappings
+        assert len(script_call.input_mappings) == 2
+        assert script_call.input_mappings[0].source == "input"
+        assert script_call.input_mappings[0].target == "input"
+        assert script_call.input_mappings[1].source == "config"
+        assert script_call.input_mappings[1].target == "config"
+        
+        # Check that outputVars were converted to output_mappings
+        assert len(script_call.output_mappings) == 2
+        assert script_call.output_mappings[0].source == "result"
+        assert script_call.output_mappings[0].target == "result"
+        assert script_call.output_mappings[1].source == "status"
+        assert script_call.output_mappings[1].target == "status"
     
     def test_xor_gateway(self):
         """Test parsing XOR gateway elements."""
@@ -112,7 +123,7 @@ class TestBPMParser:
             
             xorGateway "Decision Point" {
                 id: "gateway-1"
-                condition: "amount > 1000"
+                when: "amount > 1000"
             }
             
             end "Complete" {
@@ -121,7 +132,7 @@ class TestBPMParser:
             
             flow {
                 "start-1" -> "gateway-1"
-                "gateway-1" -> "end-1" [condition: "amount <= 1000"]
+                "gateway-1" -> "end-1" [when: "amount <= 1000"]
             }
         }
         '''
@@ -158,7 +169,7 @@ class TestBPMParser:
             
             xorGateway "Order Valid?" {
                 id: "order-valid-gateway"
-                condition: "isValid == true"
+                when: "isValid == true"
             }
             
             scriptCall "Process Order" {
@@ -186,8 +197,8 @@ class TestBPMParser:
             flow {
                 "start-order" -> "validate-order"
                 "validate-order" -> "order-valid-gateway"
-                "order-valid-gateway" -> "process-order" [condition: "isValid == true"]
-                "order-valid-gateway" -> "handle-invalid" [condition: "isValid == false"]
+                "order-valid-gateway" -> "process-order" [when: "isValid == true"]
+                "order-valid-gateway" -> "handle-invalid" [when: "isValid == false"]
                 "process-order" -> "end-processed"
                 "handle-invalid" -> "end-rejected"
             }

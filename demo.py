@@ -63,8 +63,8 @@ def demo_parser():
         flow {
             "start-1" -> "process-1"
             "process-1" -> "gateway-1"
-            "gateway-1" -> "end-success" [condition: "status = 3"]
-            "gateway-1" -> "end-failure" [condition: "status != 3"]
+            "gateway-1" -> "end-success" [when: "status = 3"]
+            "gateway-1" -> "end-failure" [when: "status != 3"]
         }
     }
     '''
@@ -96,7 +96,7 @@ def demo_parser():
         
         print("\n🔄 Process Flows:")
         for i, flow in enumerate(process.flows, 1):
-            condition_str = f" [condition: {flow.condition}]" if flow.condition else ""
+            condition_str = f" [when: {flow.condition}]" if flow.condition else ""
             print(f"   {i}. {flow.source_id} → {flow.target_id}{condition_str}")
         
         return process
@@ -233,13 +233,13 @@ def demo_cli_usage():
     print("💻 Available CLI commands:")
     print()
     print("   # Convert DSL to BPMN")
-    print("   PYTHONPATH=src python3 -m bpm_dsl.cli convert example_process.bpm")
+    print("   PYTHONPATH=src python3 -m bpm_dsl.cli convert examples/example_process.bpm")
     print()
     print("   # Validate a process")
-    print("   PYTHONPATH=src python3 -m bpm_dsl.cli validate example_process.bpm")
+    print("   PYTHONPATH=src python3 -m bpm_dsl.cli validate examples/example_process.bpm")
     print()
     print("   # Show process information")
-    print("   PYTHONPATH=src python3 -m bpm_dsl.cli info example_process.bpm")
+    print("   PYTHONPATH=src python3 -m bpm_dsl.cli info examples/example_process.bpm")
     print()
     print("   # Convert with custom output")
     print("   PYTHONPATH=src python3 -m bpm_dsl.cli convert input.bpm --output custom.bpmn")

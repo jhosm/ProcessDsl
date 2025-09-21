@@ -128,9 +128,9 @@ flow {
 
 The project includes several examples:
 
-- `example_process.bpm` - Complex order processing workflow
+- `examples/example_process.bpm` - Complex order processing workflow
 - `examples/simple_approval.bpm` - Document approval process
-- `test_simple.bpm` - Minimal example
+- `examples/test_simple.bpm` - Minimal example
 
 ## Programmatic Usage
 

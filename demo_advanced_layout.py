@@ -122,8 +122,8 @@ def demo_gateway_process():
         flow {
             "start-submit" -> "check-amount"
             "check-amount" -> "approval-gateway"
-            "approval-gateway" -> "auto-approve" [condition: "needsApproval == false"]
-            "approval-gateway" -> "manual-review" [condition: "needsApproval == true"]
+            "approval-gateway" -> "auto-approve" [when: "needsApproval == false"]
+            "approval-gateway" -> "manual-review" [when: "needsApproval == true"]
             "manual-review" -> "manager-approval"
             "auto-approve" -> "merge-gateway"
             "manager-approval" -> "merge-gateway"
@@ -214,8 +214,8 @@ def demo_custom_layout_config():
         flow {
             "start-doc" -> "initial-check"
             "initial-check" -> "valid-gateway"
-            "valid-gateway" -> "reject-doc" [condition: "isValid == false"]
-            "valid-gateway" -> "tech-review" [condition: "isValid == true"]
+            "valid-gateway" -> "reject-doc" [when: "isValid == false"]
+            "valid-gateway" -> "tech-review" [when: "isValid == true"]
             "tech-review" -> "content-review"
             "content-review" -> "final-decision"
             "final-decision" -> "end-review"

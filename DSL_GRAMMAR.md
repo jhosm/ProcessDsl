@@ -84,7 +84,7 @@ STRING = '"' [^"]* '"'
 - **BPMN Mapping**: `<bpmn:sequenceFlow>`
 
 ## Example Usage
-See `example_process.bpm` for a complete example demonstrating all primitives.
+See `examples/example_process.bpm` for a complete example demonstrating all primitives.
 
 ## Zeebe Compatibility Notes
 - Script tasks will use `zeebe:script` extension elements

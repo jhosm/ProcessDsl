@@ -23,7 +23,7 @@ process "Order Processing" {
     // XOR Gateway for decision
     xorGateway "Order Valid?" {
         id: "order-valid-gateway"
-        condition: "isValid == true"
+        when: "isValid == true"
     }
     
     // Script task for processing valid orders
@@ -65,8 +65,8 @@ process "Order Processing" {
     flow {
         "start-order" -> "validate-order"
         "validate-order" -> "order-valid-gateway"
-        "order-valid-gateway" -> "process-order" [condition: "isValid == true"]
-        "order-valid-gateway" -> "handle-invalid" [condition: "isValid == false"]
+        "order-valid-gateway" -> "process-order" [when: "isValid == true"]
+        "order-valid-gateway" -> "handle-invalid" [when: "isValid == false"]
         "process-order" -> "end-processed"
         "handle-invalid" -> "end-rejected"
     }

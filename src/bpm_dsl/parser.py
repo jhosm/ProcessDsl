@@ -153,14 +153,26 @@ class BPMTransformer(Transformer):
         return {'output_mappings': mappings_list}
     
     @v_args(inline=True)
+    def input_vars(self, vars_list: List[str]) -> dict:
+        """Extract input variables and convert to simple mappings."""
+        mappings = [VariableMapping(source=var, target=var) for var in vars_list]
+        return {'input_mappings': mappings}
+    
+    @v_args(inline=True)
+    def output_vars(self, vars_list: List[str]) -> dict:
+        """Extract output variables and convert to simple mappings."""
+        mappings = [VariableMapping(source=var, target=var) for var in vars_list]
+        return {'output_mappings': mappings}
+    
+    @v_args(inline=True)
     def result_variable(self, result_var: str) -> dict:
         """Extract result variable."""
         return {'result_variable': result_var}
     
     @v_args(inline=True)
-    def gateway_condition(self, condition: str) -> dict:
-        """Extract gateway condition."""
-        return {'condition': condition}
+    def gateway_condition(self, when: str) -> dict:
+        """Extract gateway when condition."""
+        return {'condition': when}
     
     def flow_section(self, items) -> dict:
         """Create flow section."""
@@ -179,9 +191,9 @@ class BPMTransformer(Transformer):
         return Flow(source_id=source_id, target_id=target_id, condition=condition)
     
     @v_args(inline=True)
-    def flow_condition(self, condition: str) -> str:
-        """Extract flow condition."""
-        return condition
+    def flow_condition(self, when: str) -> str:
+        """Extract flow when condition."""
+        return when
     
     def string_array(self, items) -> List[str]:
         """Create string array."""

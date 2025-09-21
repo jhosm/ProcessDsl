@@ -145,7 +145,7 @@ class TestBPMNGenerator:
             
             xorGateway "Decision Point" {
                 id: "gateway-1"
-                condition: "amount > 1000"
+                when: "amount > 1000"
             }
             
             end "High Amount" {
@@ -158,8 +158,8 @@ class TestBPMNGenerator:
             
             flow {
                 "start-1" -> "gateway-1"
-                "gateway-1" -> "end-high" [condition: "amount > 1000"]
-                "gateway-1" -> "end-low" [condition: "amount <= 1000"]
+                "gateway-1" -> "end-high" [when: "amount > 1000"]
+                "gateway-1" -> "end-low" [when: "amount <= 1000"]
             }
         }
         '''

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_order-process" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
+  <process id="order-process" name="Order Processing" isExecutable="true">
+    <startEvent id="start-order" name="Order Received"/>
+    <scriptTask id="validate-order" name="Validate Order">
+      <extensionElements>
+        <zeebe:script expression="=validateOrderData(order)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:output source="=isValid" target="isValid"/>
+          <zeebe:output source="=validationErrors" target="validationErrors"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <exclusiveGateway id="order-valid-gateway" name="Order Valid?"/>
+    <scriptTask id="process-order" name="Process Order">
+      <extensionElements>
+        <zeebe:script expression="=processValidOrder(order)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:output source="=processedOrder" target="processedOrder"/>
+          <zeebe:output source="=orderNumber" target="orderNumber"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <scriptTask id="handle-invalid" name="Handle Invalid Order">
+      <extensionElements>
+        <zeebe:script expression="=handleInvalidOrder(order, validationErrors)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:input source="=validationErrors" target="validationErrors"/>
+          <zeebe:output source="=rejectionReason" target="rejectionReason"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <endEvent id="end-processed" name="Order Processed"/>
+    <endEvent id="end-rejected" name="Order Rejected"/>
+    <sequenceFlow id="flow_start-order_to_validate-order" sourceRef="start-order" targetRef="validate-order"/>
+    <sequenceFlow id="flow_validate-order_to_order-valid-gateway" sourceRef="validate-order" targetRef="order-valid-gateway"/>
+    <sequenceFlow id="flow_order-valid-gateway_to_process-order" sourceRef="order-valid-gateway" targetRef="process-order">
+      <conditionExpression xsi:type="tFormalExpression">=isValid = true</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_order-valid-gateway_to_handle-invalid" sourceRef="order-valid-gateway" targetRef="handle-invalid">
+      <conditionExpression xsi:type="tFormalExpression">=isValid = false</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_process-order_to_end-processed" sourceRef="process-order" targetRef="end-processed"/>
+    <sequenceFlow id="flow_handle-invalid_to_end-rejected" sourceRef="handle-invalid" targetRef="end-rejected"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram_order-process">
+    <bpmndi:BPMNPlane id="plane_order-process" bpmnElement="order-process">
+      <bpmndi:BPMNShape id="shape_start-order" bpmnElement="start-order">
+        <dc:Bounds x="50" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_validate-order" bpmnElement="validate-order">
+        <dc:Bounds x="286" y="150" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_order-valid-gateway" bpmnElement="order-valid-gateway">
+        <dc:Bounds x="586" y="150" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_process-order" bpmnElement="process-order">
+        <dc:Bounds x="836" y="75" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_handle-invalid" bpmnElement="handle-invalid">
+        <dc:Bounds x="836" y="195" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end-processed" bpmnElement="end-processed">
+        <dc:Bounds x="1136" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end-rejected" bpmnElement="end-rejected">
+        <dc:Bounds x="1136" y="250" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_start-order_to_validate-order" bpmnElement="flow_start-order_to_validate-order">
+        <di:waypoint x="86" y="168"/>
+        <di:waypoint x="186" y="168"/>
+        <di:waypoint x="186" y="190"/>
+        <di:waypoint x="286" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_validate-order_to_order-valid-gateway" bpmnElement="flow_validate-order_to_order-valid-gateway">
+        <di:waypoint x="386" y="190"/>
+        <di:waypoint x="486" y="190"/>
+        <di:waypoint x="486" y="175"/>
+        <di:waypoint x="586" y="175"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_order-valid-gateway_to_process-order" bpmnElement="flow_order-valid-gateway_to_process-order">
+        <di:waypoint x="636" y="175"/>
+        <di:waypoint x="736" y="175"/>
+        <di:waypoint x="736" y="115"/>
+        <di:waypoint x="836" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_order-valid-gateway_to_handle-invalid" bpmnElement="flow_order-valid-gateway_to_handle-invalid">
+        <di:waypoint x="636" y="175"/>
+        <di:waypoint x="736" y="175"/>
+        <di:waypoint x="736" y="235"/>
+        <di:waypoint x="836" y="235"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_process-order_to_end-processed" bpmnElement="flow_process-order_to_end-processed">
+        <di:waypoint x="936" y="115"/>
+        <di:waypoint x="1036" y="115"/>
+        <di:waypoint x="1036" y="168"/>
+        <di:waypoint x="1136" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_handle-invalid_to_end-rejected" bpmnElement="flow_handle-invalid_to_end-rejected">
+        <di:waypoint x="936" y="235"/>
+        <di:waypoint x="1036" y="235"/>
+        <di:waypoint x="1036" y="268"/>
+        <di:waypoint x="1136" y="268"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

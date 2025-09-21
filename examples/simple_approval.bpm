@@ -18,7 +18,7 @@ process "Document Approval" {
     // Decision point based on validation
     xorGateway "Document Valid?" {
         id: "validation-gateway"
-        condition: "isValid == true"
+        when: "isValid == true"
     }
     
     // Process valid documents
@@ -51,8 +51,8 @@ process "Document Approval" {
     flow {
         "start-submission" -> "validate-doc"
         "validate-doc" -> "validation-gateway"
-        "validation-gateway" -> "review-doc" [condition: "isValid == true"]
-        "validation-gateway" -> "reject-doc" [condition: "isValid == false"]
+        "validation-gateway" -> "review-doc" [when: "isValid == true"]
+        "validation-gateway" -> "reject-doc" [when: "isValid == false"]
         "review-doc" -> "end-approved"
         "reject-doc" -> "end-rejected"
     }
