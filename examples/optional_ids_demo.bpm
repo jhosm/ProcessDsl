@@ -1,0 +1,58 @@
+process "Optional IDs Demo" {
+    id: "optional-ids-demo"
+    version: "1.0"
+    
+    // Elements without explicit IDs - will use kebab-case names
+    start "Order Received" {
+    }
+    
+    scriptCall "Validate Order Data" {
+        script: "validateOrder(orderData)"
+        inputMappings: [
+            "orderData" -> "orderData"
+        ]
+        outputMappings: [
+            "isValid" -> "isValid"
+        ]
+    }
+    
+    xorGateway "Is Order Valid?" {
+        when: "isValid == true"
+    }
+    
+    scriptCall "Process Valid Order" {
+        script: "processOrder(orderData)"
+        inputMappings: [
+            "orderData" -> "orderData"
+        ]
+        outputMappings: [
+            "orderResult" -> "orderResult"
+        ]
+    }
+    
+    scriptCall "Handle Invalid Order" {
+        script: "rejectOrder(orderData)"
+        inputMappings: [
+            "orderData" -> "orderData"
+        ]
+        outputMappings: [
+            "rejectionReason" -> "rejectionReason"
+        ]
+    }
+    
+    end "Order Processed" {
+    }
+    
+    end "Order Rejected" {
+    }
+    
+    // Flow using auto-generated kebab-case IDs
+    flow {
+        "order-received" -> "validate-order-data"
+        "validate-order-data" -> "is-order-valid"
+        "is-order-valid" -> "process-valid-order" [when: "isValid == true"]
+        "is-order-valid" -> "handle-invalid-order" [when: "isValid == false"]
+        "process-valid-order" -> "order-processed"
+        "handle-invalid-order" -> "order-rejected"
+    }
+}

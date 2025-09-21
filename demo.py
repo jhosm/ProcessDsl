@@ -32,11 +32,9 @@ def demo_parser():
         version: "1.0"
         
         start "Start Demo" {
-            id: "start-1"
         }
         
         scriptCall "Process Data" {
-            id: "process-1"
             script: "localUserData"
             inputMappings: [
                 "userData" -> "localUserData"
@@ -49,22 +47,19 @@ def demo_parser():
         }
         
         xorGateway "Check Status" {
-            id: "gateway-1"
         }
         
         end "Success" {
-            id: "end-success"
         }
         
         end "Failure" {
-            id: "end-failure"
         }
         
         flow {
-            "start-1" -> "process-1"
-            "process-1" -> "gateway-1"
-            "gateway-1" -> "end-success" [when: "status = 3"]
-            "gateway-1" -> "end-failure" [when: "status != 3"]
+            "start-demo" -> "process-data"
+            "process-data" -> "check-status"
+            "check-status" -> "success" [when: "status = 3"]
+            "check-status" -> "failure" [when: "status != 3"]
         }
     }
     '''

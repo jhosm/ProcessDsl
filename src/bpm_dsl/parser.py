@@ -1,6 +1,7 @@
 """BPM DSL Parser using Lark."""
 
 import os
+import re
 from pathlib import Path
 from typing import List, Optional, Union
 from lark import Lark, Transformer, v_args
@@ -10,6 +11,21 @@ from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, XORGateway, 
     Flow, Element, ASTNode, VariableMapping
 )
+
+
+def to_kebab_case(name: str) -> str:
+    """Convert a name to kebab-case for use as an ID.
+    
+    Examples:
+        "Process Data" -> "process-data"
+        "Order Valid?" -> "order-valid"
+        "Start Demo" -> "start-demo"
+    """
+    # Remove quotes and special characters, keep alphanumeric and spaces
+    clean_name = re.sub(r'[^\w\s]', '', name)
+    # Replace spaces and underscores with hyphens, convert to lowercase
+    kebab_name = re.sub(r'[\s_]+', '-', clean_name.strip()).lower()
+    return kebab_name
 
 
 class BPMTransformer(Transformer):
@@ -80,20 +96,23 @@ class BPMTransformer(Transformer):
     @v_args(inline=True)
     def start_element(self, name: str, properties: dict) -> StartEvent:
         """Create a StartEvent node."""
-        return StartEvent(name=name, id=properties['id'])
+        element_id = properties.get('id', to_kebab_case(name))
+        return StartEvent(name=name, id=element_id)
     
     @v_args(inline=True)
     def end_element(self, name: str, properties: dict) -> EndEvent:
         """Create an EndEvent node."""
-        return EndEvent(name=name, id=properties['id'])
+        element_id = properties.get('id', to_kebab_case(name))
+        return EndEvent(name=name, id=element_id)
     
     @v_args(inline=True)
     def script_call(self, name: str, properties: dict) -> ScriptCall:
         """Create a ScriptCall node."""
+        element_id = properties.get('id', to_kebab_case(name))
         return ScriptCall(
             name=name,
-            id=properties['id'],
-            script=properties['script'],
+            id=element_id,
+            script=properties.get('script', ''),
             input_mappings=properties.get('input_mappings', []),
             output_mappings=properties.get('output_mappings', []),
             result_variable=properties.get('result_variable')
@@ -102,9 +121,10 @@ class BPMTransformer(Transformer):
     @v_args(inline=True)
     def xor_gateway(self, name: str, properties: dict) -> XORGateway:
         """Create an XORGateway node."""
+        element_id = properties.get('id', to_kebab_case(name))
         return XORGateway(
             name=name,
-            id=properties['id'],
+            id=element_id,
             condition=properties.get('condition')
         )
     

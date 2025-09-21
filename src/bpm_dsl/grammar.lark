@@ -18,16 +18,16 @@ element: start_element
        | xor_gateway
 
 start_element: "start" STRING "{" start_properties "}"
-start_properties: element_id
+start_properties: element_id?
 
 end_element: "end" STRING "{" end_properties "}"
-end_properties: element_id
+end_properties: element_id?
 
 script_call: "scriptCall" STRING "{" script_properties "}"
-script_properties: element_id script_code (input_mappings | input_vars)? (output_mappings | output_vars)? result_variable?
+script_properties: element_id? script_code? (input_mappings | input_vars)? (output_mappings | output_vars)? result_variable?
 
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
-gateway_properties: element_id gateway_condition?
+gateway_properties: element_id? gateway_condition?
 
 element_id: "id:" STRING
 script_code: "script:" STRING
