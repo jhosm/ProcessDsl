@@ -12,11 +12,11 @@ process "Order Processing" {
         id: "validate-order"
         script: "validateOrderData(order)"
         inputMappings: [
-            {source: "order" target: "order"}
+            "order" -> "order"
         ]
         outputMappings: [
-            {source: "isValid" target: "isValid"},
-            {source: "validationErrors" target: "validationErrors"}
+            "isValid" -> "isValid",
+            "validationErrors" -> "validationErrors"
         ]
     }
     
@@ -31,11 +31,11 @@ process "Order Processing" {
         id: "process-order"
         script: "processValidOrder(order)"
         inputMappings: [
-            {source: "order" target: "order"}
+            "order" -> "order"
         ]
         outputMappings: [
-            {source: "processedOrder" target: "processedOrder"},
-            {source: "orderNumber" target: "orderNumber"}
+            "processedOrder" -> "processedOrder",
+            "orderNumber" -> "orderNumber"
         ]
     }
     
@@ -44,11 +44,11 @@ process "Order Processing" {
         id: "handle-invalid"
         script: "handleInvalidOrder(order, validationErrors)"
         inputMappings: [
-            {source: "order" target: "order"},
-            {source: "validationErrors" target: "validationErrors"}
+            "order" -> "order",
+            "validationErrors" -> "validationErrors"
         ]
         outputMappings: [
-            {source: "rejectionReason" target: "rejectionReason"}
+            "rejectionReason" -> "rejectionReason"
         ]
     }
     

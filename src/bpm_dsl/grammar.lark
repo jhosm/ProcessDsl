@@ -44,9 +44,7 @@ flow_condition: "[" "when:" STRING "]"
 
 string_array: "[" (STRING ("," STRING)*)? "]"
 mapping_array: "[" (variable_mapping ("," variable_mapping)*)? "]"
-variable_mapping: "{" mapping_source mapping_target "}"
-mapping_source: "source:" STRING
-mapping_target: "target:" STRING
+variable_mapping: STRING "->" STRING
 
 // Terminals
 STRING: /"[^"]*"/

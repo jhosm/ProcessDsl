@@ -39,11 +39,11 @@ def demo_parser():
             id: "process-1"
             script: "localUserData"
             inputMappings: [
-                {source: "userData" target: "localUserData"}
+                "userData" -> "localUserData"
             ]
             outputMappings: [
-                {source: "processedData" target: "processedData"},
-                {source: "statusResult" target: "status"}
+                "processedData" -> "processedData",
+                "statusResult" -> "status"
             ]
             resultVariable: "statusResult"
         }

@@ -203,30 +203,10 @@ class BPMTransformer(Transformer):
         """Create variable mapping array."""
         return [item for item in items if isinstance(item, VariableMapping)]
     
-    def variable_mapping(self, items) -> VariableMapping:
-        """Create a variable mapping from parsed items."""
-        # Extract source and target from the parsed items
-        source = None
-        target = None
-        
-        for item in items:
-            if isinstance(item, dict):
-                if 'source' in item:
-                    source = item['source']
-                elif 'target' in item:
-                    target = item['target']
-        
+    @v_args(inline=True)
+    def variable_mapping(self, source: str, target: str) -> VariableMapping:
+        """Create a variable mapping from arrow syntax: 'source' -> 'target'."""
         return VariableMapping(source=source, target=target)
-    
-    @v_args(inline=True)
-    def mapping_source(self, value: str) -> dict:
-        """Extract mapping source value."""
-        return {'source': value}
-    
-    @v_args(inline=True)
-    def mapping_target(self, value: str) -> dict:
-        """Extract mapping target value."""
-        return {'target': value}
 
 
 class BPMParser:
