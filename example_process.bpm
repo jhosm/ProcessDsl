@@ -11,8 +11,13 @@ process "Order Processing" {
     scriptCall "Validate Order" {
         id: "validate-order"
         script: "validateOrderData(order)"
-        inputVars: ["order"]
-        outputVars: ["isValid", "validationErrors"]
+        inputMappings: [
+            {source: "order" target: "order"}
+        ]
+        outputMappings: [
+            {source: "isValid" target: "isValid"},
+            {source: "validationErrors" target: "validationErrors"}
+        ]
     }
     
     // XOR Gateway for decision
@@ -25,16 +30,26 @@ process "Order Processing" {
     scriptCall "Process Order" {
         id: "process-order"
         script: "processValidOrder(order)"
-        inputVars: ["order"]
-        outputVars: ["processedOrder", "orderNumber"]
+        inputMappings: [
+            {source: "order" target: "order"}
+        ]
+        outputMappings: [
+            {source: "processedOrder" target: "processedOrder"},
+            {source: "orderNumber" target: "orderNumber"}
+        ]
     }
     
     // Script task for handling invalid orders
     scriptCall "Handle Invalid Order" {
         id: "handle-invalid"
         script: "handleInvalidOrder(order, validationErrors)"
-        inputVars: ["order", "validationErrors"]
-        outputVars: ["rejectionReason"]
+        inputMappings: [
+            {source: "order" target: "order"},
+            {source: "validationErrors" target: "validationErrors"}
+        ]
+        outputMappings: [
+            {source: "rejectionReason" target: "rejectionReason"}
+        ]
     }
     
     // End events

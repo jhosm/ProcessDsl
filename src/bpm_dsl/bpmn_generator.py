@@ -9,12 +9,13 @@ from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, XORGateway, 
     Flow, Element as BPMElement
 )
+from .layout_engine import BPMNLayoutEngine, LayoutConfig
 
 
 class BPMNGenerator:
     """Generates BPMN XML from BPM DSL AST."""
     
-    def __init__(self):
+    def __init__(self, layout_config: LayoutConfig = None):
         """Initialize the BPMN generator."""
         self.namespaces = {
             'bpmn': 'http://www.omg.org/spec/BPMN/20100524/MODEL',
@@ -24,6 +25,9 @@ class BPMNGenerator:
             'zeebe': 'http://camunda.org/schema/zeebe/1.0',
             'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
         }
+        
+        # Initialize layout engine
+        self.layout_engine = BPMNLayoutEngine(layout_config)
         
         # Don't register namespaces - handle them manually to avoid duplicates
     
@@ -128,20 +132,20 @@ class BPMNGenerator:
         zeebe_script.set("resultVariable", script.result_variable)
         
         # Add input/output variable mappings if specified
-        if script.input_vars or script.output_vars:
+        if script.input_mappings or script.output_mappings:
             io_mapping = SubElement(extension_elements, "zeebe:ioMapping")
             
-            # Input mappings
-            for var in script.input_vars:
+            # Input mappings: map process variables to local script variables
+            for mapping in script.input_mappings:
                 input_param = SubElement(io_mapping, "zeebe:input")
-                input_param.set("source", self._ensure_feel_expression(var))
-                input_param.set("target", var)
+                input_param.set("source", self._ensure_feel_expression(mapping.source))  # Process variable (needs FEEL expression)
+                input_param.set("target", mapping.target)  # Local variable
             
-            # Output mappings  
-            for var in script.output_vars:
+            # Output mappings: map local script variables back to process variables
+            for mapping in script.output_mappings:
                 output_param = SubElement(io_mapping, "zeebe:output")
-                output_param.set("source", self._ensure_feel_expression(var))
-                output_param.set("target", var)
+                output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
+                output_param.set("target", mapping.target)  # Process variable
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
         """Add an exclusive gateway to the process."""
@@ -168,7 +172,7 @@ class BPMNGenerator:
                 condition_expr.text = self._ensure_feel_expression(flow.condition)
     
     def _add_diagram(self, definitions: Element, process: Process) -> None:
-        """Add basic BPMN diagram information for visualization."""
+        """Add advanced BPMN diagram information with professional layout."""
         diagram = SubElement(definitions, "bpmndi:BPMNDiagram")
         diagram.set("id", f"diagram_{process.id}")
         
@@ -176,41 +180,42 @@ class BPMNGenerator:
         plane.set("id", f"plane_{process.id}")
         plane.set("bpmnElement", process.id)
         
-        # Add basic shapes for elements (simple horizontal layout)
-        x_pos = 100
-        y_pos = 100
-        element_width = 100
-        element_height = 80
-        spacing = 150
+        # Calculate advanced layout using the layout engine
+        element_positions, edge_routes = self.layout_engine.calculate_layout(process)
         
+        # Add shapes for elements with calculated positions
         for element in process.elements:
+            if element.id not in element_positions:
+                continue
+                
             shape = SubElement(plane, "bpmndi:BPMNShape")
             shape.set("id", f"shape_{element.id}")
             shape.set("bpmnElement", element.id)
             
+            pos = element_positions[element.id]
             bounds = SubElement(shape, "dc:Bounds")
-            bounds.set("x", str(x_pos))
-            bounds.set("y", str(y_pos))
-            bounds.set("width", str(element_width))
-            bounds.set("height", str(element_height))
-            
-            x_pos += spacing
+            bounds.set("x", str(int(pos.x)))
+            bounds.set("y", str(int(pos.y)))
+            bounds.set("width", str(int(pos.width)))
+            bounds.set("height", str(int(pos.height)))
         
-        # Add basic edges for flows
+        # Add edges with calculated routes
         for flow in process.flows:
-            edge = SubElement(plane, "bpmndi:BPMNEdge")
             flow_id = f"flow_{flow.source_id}_to_{flow.target_id}"
+            
+            if flow_id not in edge_routes:
+                continue
+                
+            edge = SubElement(plane, "bpmndi:BPMNEdge")
             edge.set("id", f"edge_{flow_id}")
             edge.set("bpmnElement", flow_id)
             
-            # Add waypoints (simplified)
-            waypoint1 = SubElement(edge, "di:waypoint")
-            waypoint1.set("x", "200")
-            waypoint1.set("y", "140")
-            
-            waypoint2 = SubElement(edge, "di:waypoint")
-            waypoint2.set("x", "250")
-            waypoint2.set("y", "140")
+            # Add waypoints from calculated route
+            route = edge_routes[flow_id]
+            for waypoint in route.waypoints:
+                wp = SubElement(edge, "di:waypoint")
+                wp.set("x", str(int(waypoint.x)))
+                wp.set("y", str(int(waypoint.y)))
     
     def _prettify_xml(self, element: Element) -> str:
         """Convert XML element to pretty-printed string."""

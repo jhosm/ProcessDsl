@@ -8,7 +8,7 @@ from lark.exceptions import LarkError
 
 from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, XORGateway, 
-    Flow, Element, ASTNode
+    Flow, Element, ASTNode, VariableMapping
 )
 
 
@@ -94,8 +94,8 @@ class BPMTransformer(Transformer):
             name=name,
             id=properties['id'],
             script=properties['script'],
-            input_vars=properties.get('input_vars', []),
-            output_vars=properties.get('output_vars', []),
+            input_mappings=properties.get('input_mappings', []),
+            output_mappings=properties.get('output_mappings', []),
             result_variable=properties.get('result_variable')
         )
     
@@ -143,14 +143,14 @@ class BPMTransformer(Transformer):
         return {'script': script}
     
     @v_args(inline=True)
-    def input_vars(self, vars_list: List[str]) -> dict:
-        """Extract input variables."""
-        return {'input_vars': vars_list}
+    def input_mappings(self, mappings_list: List[VariableMapping]) -> dict:
+        """Extract input variable mappings."""
+        return {'input_mappings': mappings_list}
     
     @v_args(inline=True)
-    def output_vars(self, vars_list: List[str]) -> dict:
-        """Extract output variables."""
-        return {'output_vars': vars_list}
+    def output_mappings(self, mappings_list: List[VariableMapping]) -> dict:
+        """Extract output variable mappings."""
+        return {'output_mappings': mappings_list}
     
     @v_args(inline=True)
     def result_variable(self, result_var: str) -> dict:
@@ -186,6 +186,35 @@ class BPMTransformer(Transformer):
     def string_array(self, items) -> List[str]:
         """Create string array."""
         return [item for item in items if isinstance(item, str)]
+    
+    def mapping_array(self, items) -> List[VariableMapping]:
+        """Create variable mapping array."""
+        return [item for item in items if isinstance(item, VariableMapping)]
+    
+    def variable_mapping(self, items) -> VariableMapping:
+        """Create a variable mapping from parsed items."""
+        # Extract source and target from the parsed items
+        source = None
+        target = None
+        
+        for item in items:
+            if isinstance(item, dict):
+                if 'source' in item:
+                    source = item['source']
+                elif 'target' in item:
+                    target = item['target']
+        
+        return VariableMapping(source=source, target=target)
+    
+    @v_args(inline=True)
+    def mapping_source(self, value: str) -> dict:
+        """Extract mapping source value."""
+        return {'source': value}
+    
+    @v_args(inline=True)
+    def mapping_target(self, value: str) -> dict:
+        """Extract mapping target value."""
+        return {'target': value}
 
 
 class BPMParser:

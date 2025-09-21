@@ -114,14 +114,18 @@ class ProcessValidator:
         if not script.script or not script.script.strip():
             errors.append(f"Script call {script.id} must have a non-empty script")
         
-        # Validate variable names
-        for var in script.input_vars or []:
-            if not self._is_valid_variable_name(var):
-                errors.append(f"Invalid input variable name '{var}' in script call {script.id}")
+        # Validate variable mappings
+        for mapping in script.input_mappings or []:
+            if not self._is_valid_variable_name(mapping.source):
+                errors.append(f"Invalid input mapping source variable name '{mapping.source}' in script call {script.id}")
+            if not self._is_valid_variable_name(mapping.target):
+                errors.append(f"Invalid input mapping target variable name '{mapping.target}' in script call {script.id}")
         
-        for var in script.output_vars or []:
-            if not self._is_valid_variable_name(var):
-                errors.append(f"Invalid output variable name '{var}' in script call {script.id}")
+        for mapping in script.output_mappings or []:
+            if not self._is_valid_variable_name(mapping.source):
+                errors.append(f"Invalid output mapping source variable name '{mapping.source}' in script call {script.id}")
+            if not self._is_valid_variable_name(mapping.target):
+                errors.append(f"Invalid output mapping target variable name '{mapping.target}' in script call {script.id}")
         
         return errors
     

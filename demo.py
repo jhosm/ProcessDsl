@@ -27,8 +27,8 @@ def demo_parser():
     
     # Parse a simple inline DSL
     simple_dsl = '''
-    process "Demo Process" {
-        id: "demo-process"
+    process "Demo Process 5" {
+        id: "demo-process-5"
         version: "1.0"
         
         start "Start Demo" {
@@ -37,15 +37,19 @@ def demo_parser():
         
         scriptCall "Process Data" {
             id: "process-1"
-            script: "'success'"
-            inputVars: ["userData"]
-            outputVars: ["processedData"]
-            resultVariable: "status"
+            script: "localUserData"
+            inputMappings: [
+                {source: "userData" target: "localUserData"}
+            ]
+            outputMappings: [
+                {source: "processedData" target: "processedData"},
+                {source: "statusResult" target: "status"}
+            ]
+            resultVariable: "statusResult"
         }
         
         xorGateway "Check Status" {
             id: "gateway-1"
-            condition: "status == 'success'"
         }
         
         end "Success" {
@@ -59,8 +63,8 @@ def demo_parser():
         flow {
             "start-1" -> "process-1"
             "process-1" -> "gateway-1"
-            "gateway-1" -> "end-success" [condition: "status == 'success'"]
-            "gateway-1" -> "end-failure" [condition: "status != 'success'"]
+            "gateway-1" -> "end-success" [condition: "status = 3"]
+            "gateway-1" -> "end-failure" [condition: "status != 3"]
         }
     }
     '''
@@ -81,10 +85,12 @@ def demo_parser():
             # Show additional details for script calls
             if hasattr(element, 'script'):
                 print(f"      Script: {element.script}")
-                if element.input_vars:
-                    print(f"      Input vars: {element.input_vars}")
-                if element.output_vars:
-                    print(f"      Output vars: {element.output_vars}")
+                if element.input_mappings:
+                    mappings = [f"{m.source} -> {m.target}" for m in element.input_mappings]
+                    print(f"      Input mappings: {mappings}")
+                if element.output_mappings:
+                    mappings = [f"{m.source} -> {m.target}" for m in element.output_mappings]
+                    print(f"      Output mappings: {mappings}")
                 if element.result_variable:
                     print(f"      Result variable: {element.result_variable}")
         

@@ -24,15 +24,15 @@ end_element: "end" STRING "{" end_properties "}"
 end_properties: element_id
 
 script_call: "scriptCall" STRING "{" script_properties "}"
-script_properties: element_id script_code input_vars? output_vars? result_variable?
+script_properties: element_id script_code input_mappings? output_mappings? result_variable?
 
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties: element_id gateway_condition?
 
 element_id: "id:" STRING
 script_code: "script:" STRING
-input_vars: "inputVars:" string_array
-output_vars: "outputVars:" string_array
+input_mappings: "inputMappings:" mapping_array
+output_mappings: "outputMappings:" mapping_array
 result_variable: "resultVariable:" STRING
 gateway_condition: "condition:" STRING
 
@@ -41,6 +41,10 @@ flow_definition: STRING "->" STRING flow_condition?
 flow_condition: "[" "condition:" STRING "]"
 
 string_array: "[" (STRING ("," STRING)*)? "]"
+mapping_array: "[" (variable_mapping ("," variable_mapping)*)? "]"
+variable_mapping: "{" mapping_source mapping_target "}"
+mapping_source: "source:" STRING
+mapping_target: "target:" STRING
 
 // Terminals
 STRING: /"[^"]*"/
