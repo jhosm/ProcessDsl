@@ -1,0 +1,101 @@
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_default-flow-demo" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
+  <process id="default-flow-demo" name="Default Flow Demo" isExecutable="true">
+    <startEvent id="order-received" name="Order Received"/>
+    <scriptTask id="check-order-amount" name="Check Order Amount">
+      <extensionElements>
+        <zeebe:script expression="=checkOrderAmount(order)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:output source="=amount" target="amount"/>
+          <zeebe:output source="=isHighValue" target="isHighValue"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <exclusiveGateway id="high-value-order" name="High Value Order?" default="flow_high-value-order_to_process-standard-order"/>
+    <scriptTask id="process-high-value-order" name="Process High Value Order">
+      <extensionElements>
+        <zeebe:script expression="=processHighValueOrder(order)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:output source="=result" target="highValueResult"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <scriptTask id="process-standard-order" name="Process Standard Order">
+      <extensionElements>
+        <zeebe:script expression="=processStandardOrder(order)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=order" target="order"/>
+          <zeebe:output source="=result" target="standardResult"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <endEvent id="order-processed" name="Order Processed"/>
+    <sequenceFlow id="flow_order-received_to_check-order-amount" sourceRef="order-received" targetRef="check-order-amount"/>
+    <sequenceFlow id="flow_check-order-amount_to_high-value-order" sourceRef="check-order-amount" targetRef="high-value-order"/>
+    <sequenceFlow id="flow_high-value-order_to_process-high-value-order" sourceRef="high-value-order" targetRef="process-high-value-order">
+      <conditionExpression xsi:type="tFormalExpression">=isHighValue = true</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_high-value-order_to_process-standard-order" sourceRef="high-value-order" targetRef="process-standard-order"/>
+    <sequenceFlow id="flow_process-high-value-order_to_order-processed" sourceRef="process-high-value-order" targetRef="order-processed"/>
+    <sequenceFlow id="flow_process-standard-order_to_order-processed" sourceRef="process-standard-order" targetRef="order-processed"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram_default-flow-demo">
+    <bpmndi:BPMNPlane id="plane_default-flow-demo" bpmnElement="default-flow-demo">
+      <bpmndi:BPMNShape id="shape_order-received" bpmnElement="order-received">
+        <dc:Bounds x="50" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_check-order-amount" bpmnElement="check-order-amount">
+        <dc:Bounds x="286" y="150" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_high-value-order" bpmnElement="high-value-order">
+        <dc:Bounds x="586" y="150" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_process-high-value-order" bpmnElement="process-high-value-order">
+        <dc:Bounds x="836" y="75" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_process-standard-order" bpmnElement="process-standard-order">
+        <dc:Bounds x="836" y="195" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_order-processed" bpmnElement="order-processed">
+        <dc:Bounds x="1136" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_order-received_to_check-order-amount" bpmnElement="flow_order-received_to_check-order-amount">
+        <di:waypoint x="86" y="168"/>
+        <di:waypoint x="186" y="168"/>
+        <di:waypoint x="186" y="190"/>
+        <di:waypoint x="286" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_check-order-amount_to_high-value-order" bpmnElement="flow_check-order-amount_to_high-value-order">
+        <di:waypoint x="386" y="190"/>
+        <di:waypoint x="486" y="190"/>
+        <di:waypoint x="486" y="175"/>
+        <di:waypoint x="586" y="175"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_high-value-order_to_process-high-value-order" bpmnElement="flow_high-value-order_to_process-high-value-order">
+        <di:waypoint x="636" y="175"/>
+        <di:waypoint x="736" y="175"/>
+        <di:waypoint x="736" y="115"/>
+        <di:waypoint x="836" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_high-value-order_to_process-standard-order" bpmnElement="flow_high-value-order_to_process-standard-order">
+        <di:waypoint x="636" y="175"/>
+        <di:waypoint x="736" y="175"/>
+        <di:waypoint x="736" y="235"/>
+        <di:waypoint x="836" y="235"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_process-high-value-order_to_order-processed" bpmnElement="flow_process-high-value-order_to_order-processed">
+        <di:waypoint x="936" y="115"/>
+        <di:waypoint x="1036" y="115"/>
+        <di:waypoint x="1036" y="168"/>
+        <di:waypoint x="1136" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_process-standard-order_to_order-processed" bpmnElement="flow_process-standard-order_to_order-processed">
+        <di:waypoint x="936" y="235"/>
+        <di:waypoint x="1036" y="235"/>
+        <di:waypoint x="1036" y="168"/>
+        <di:waypoint x="1136" y="168"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

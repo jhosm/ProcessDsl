@@ -219,6 +219,52 @@ class TestBPMNGenerator:
         assert 'http://www.omg.org/spec/BPMN/20100524/MODEL' in xml_content
         assert 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"' in xml_content
 
+    def test_default_flow_generation(self):
+        """Test that default flows are correctly generated in BPMN XML."""
+        dsl_content = '''
+        process "Default Flow Test" {
+            id: "default-flow-test"
+            
+            start "Start" {
+                id: "start-1"
+            }
+            
+            xorGateway "Decision" {
+                id: "gateway-1"
+            }
+            
+            end "Path A" {
+                id: "end-a"
+            }
+            
+            end "Path B" {
+                id: "end-b"
+            }
+            
+            flow {
+                "start-1" -> "gateway-1"
+                "gateway-1" -> "end-a" [when: "condition == true"]
+                "gateway-1" -> "end-b" [default]
+            }
+        }
+        '''
+        
+        process = parse_bpm_string(dsl_content)
+        generator = BPMNGenerator()
+        xml_content = generator.generate(process)
+        
+        # Check that the gateway has a default attribute pointing to the default flow
+        assert 'default="flow_gateway-1_to_end-b"' in xml_content
+        
+        # Check that the conditional flow has a condition expression
+        assert '<conditionExpression' in xml_content
+        assert 'condition = true' in xml_content
+        
+        # Check that the default flow does NOT have a condition expression
+        # Count condition expressions - should be exactly 1 (for the conditional flow)
+        condition_count = xml_content.count('<conditionExpression')
+        assert condition_count == 1
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

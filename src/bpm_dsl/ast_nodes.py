@@ -82,6 +82,7 @@ class Flow(ASTNode):
     source_id: str
     target_id: str
     condition: Optional[str] = None
+    is_default: bool = False
 
 
 @dataclass

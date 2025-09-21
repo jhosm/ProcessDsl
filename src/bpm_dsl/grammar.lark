@@ -40,7 +40,7 @@ gateway_condition: "when:" STRING
 
 flow_section: "flow" "{" flow_definition* "}"
 flow_definition: STRING "->" STRING flow_condition?
-flow_condition: "[" "when:" STRING "]"
+flow_condition: "[" "when:" STRING "]" | "[" DEFAULT "]"
 
 string_array: "[" (STRING ("," STRING)*)? "]"
 mapping_array: "[" (variable_mapping ("," variable_mapping)*)? "]"
@@ -48,6 +48,7 @@ variable_mapping: STRING "->" STRING
 
 // Terminals
 STRING: /"[^"]*"/
+DEFAULT: "default"
 COMMENT: /\/\/[^\n]*/
 
 %import common.WS

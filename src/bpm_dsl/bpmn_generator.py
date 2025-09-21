@@ -29,6 +29,9 @@ class BPMNGenerator:
         # Initialize layout engine
         self.layout_engine = BPMNLayoutEngine(layout_config)
         
+        # Track gateway elements for default flow assignment
+        self._gateway_elements = {}
+        
         # Don't register namespaces - handle them manually to avoid duplicates
     
     def _ensure_feel_expression(self, expression: str) -> str:
@@ -53,6 +56,9 @@ class BPMNGenerator:
     
     def generate(self, process: Process) -> str:
         """Generate BPMN XML from a Process AST."""
+        # Clear gateway elements for fresh generation
+        self._gateway_elements = {}
+        
         definitions = self._create_definitions(process)
         return self._prettify_xml(definitions)
     
@@ -153,8 +159,8 @@ class BPMNGenerator:
         xor_gateway.set("id", gateway.id)
         xor_gateway.set("name", gateway.name)
         
-        # Don't set default flow here - it should reference an actual flow
-        # The default flow will be determined by the actual sequence flows
+        # Store reference for setting default flow later
+        self._gateway_elements[gateway.id] = xor_gateway
     
     def _add_flows(self, parent: Element, flows: List[Flow]) -> None:
         """Add sequence flows to the process."""
@@ -165,8 +171,15 @@ class BPMNGenerator:
             sequence_flow.set("sourceRef", flow.source_id)
             sequence_flow.set("targetRef", flow.target_id)
             
-            # Add condition expression if specified
-            if flow.condition:
+            # Handle default flows
+            if flow.is_default:
+                # Set the default attribute on the source gateway
+                if flow.source_id in self._gateway_elements:
+                    gateway_element = self._gateway_elements[flow.source_id]
+                    gateway_element.set("default", flow_id)
+                # Default flows should not have conditions
+            elif flow.condition:
+                # Add condition expression for non-default flows
                 condition_expr = SubElement(sequence_flow, "conditionExpression")
                 condition_expr.set("xsi:type", "tFormalExpression")
                 condition_expr.text = self._ensure_feel_expression(flow.condition)

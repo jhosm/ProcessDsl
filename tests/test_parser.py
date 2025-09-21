@@ -220,6 +220,63 @@ class TestBPMParser:
         assert "ScriptCall" in element_types
         assert "XORGateway" in element_types
 
+    def test_default_flow(self):
+        """Test parsing of default flows in XOR gateways."""
+        dsl_content = '''
+        process "Default Flow Test" {
+            id: "default-flow-test"
+            
+            start "Start" {
+                id: "start-1"
+            }
+            
+            xorGateway "Decision" {
+                id: "gateway-1"
+            }
+            
+            end "Path A" {
+                id: "end-a"
+            }
+            
+            end "Path B" {
+                id: "end-b"
+            }
+            
+            flow {
+                "start-1" -> "gateway-1"
+                "gateway-1" -> "end-a" [when: "condition == true"]
+                "gateway-1" -> "end-b" [default]
+            }
+        }
+        '''
+        
+        process = parse_bpm_string(dsl_content)
+        
+        # Check that we have 3 flows
+        assert len(process.flows) == 3
+        
+        # Check the conditional flow
+        conditional_flow = next((f for f in process.flows if f.condition), None)
+        assert conditional_flow is not None
+        assert conditional_flow.source_id == "gateway-1"
+        assert conditional_flow.target_id == "end-a"
+        assert conditional_flow.condition == "condition == true"
+        assert conditional_flow.is_default == False
+        
+        # Check the default flow
+        default_flow = next((f for f in process.flows if f.is_default), None)
+        assert default_flow is not None
+        assert default_flow.source_id == "gateway-1"
+        assert default_flow.target_id == "end-b"
+        assert default_flow.condition is None
+        assert default_flow.is_default == True
+        
+        # Check the unconditional flow (start to gateway)
+        unconditional_flow = next((f for f in process.flows if not f.condition and not f.is_default), None)
+        assert unconditional_flow is not None
+        assert unconditional_flow.source_id == "start-1"
+        assert unconditional_flow.target_id == "gateway-1"
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

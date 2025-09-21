@@ -204,16 +204,32 @@ class BPMTransformer(Transformer):
         source_id = items[0]
         target_id = items[1]
         condition = None
+        is_default = False
         
-        if len(items) > 2 and isinstance(items[2], str):
-            condition = items[2]
+        if len(items) > 2:
+            flow_condition_result = items[2]
+            if isinstance(flow_condition_result, dict):
+                if flow_condition_result.get('is_default'):
+                    is_default = True
+                else:
+                    condition = flow_condition_result.get('condition')
+            elif isinstance(flow_condition_result, str):
+                condition = flow_condition_result
         
-        return Flow(source_id=source_id, target_id=target_id, condition=condition)
+        return Flow(source_id=source_id, target_id=target_id, condition=condition, is_default=is_default)
     
-    @v_args(inline=True)
-    def flow_condition(self, when: str) -> str:
-        """Extract flow when condition."""
-        return when
+    def flow_condition(self, items):
+        """Extract flow condition or default marker."""
+        if len(items) == 1:
+            item = items[0]
+            # Check if it's a Token with value "default"
+            if hasattr(item, 'value') and item.value == "default":
+                return {'is_default': True}
+            elif item == "default":
+                return {'is_default': True}
+            else:
+                return {'condition': item}
+        return {'condition': None}
     
     def string_array(self, items) -> List[str]:
         """Create string array."""
