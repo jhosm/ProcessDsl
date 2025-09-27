@@ -1,0 +1,29 @@
+process "Invalid Process Entity Demo" {
+    id: "invalid-process-entity-demo"
+    version: "1.0"
+
+    start "Start Process" {
+        id: "start-event"
+    }
+
+    scriptCall "Some Task First" {
+        id: "some-task"
+        script: "doSomething()"
+    }
+
+    processEntity "Load Customer Data" {
+        id: "load-customer"
+        type: "customer-data-processor"
+        entityModel: "/api/specs/customer-api.yaml"
+    }
+
+    end "End Process" {
+        id: "end-event"
+    }
+
+    flow {
+        "start-event" -> "some-task"
+        "some-task" -> "load-customer"
+        "load-customer" -> "end-event"
+    }
+}

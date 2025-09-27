@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Set, Dict
 from collections import defaultdict
 
-from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, Flow
+from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, Flow
 
 
 @dataclass
@@ -95,6 +95,10 @@ class ProcessValidator:
                 end_events.append(element)
             elif isinstance(element, ScriptCall):
                 errors.extend(self._validate_script_call(element))
+            elif isinstance(element, ServiceTask):
+                errors.extend(self._validate_service_task(element))
+            elif isinstance(element, ProcessEntity):
+                errors.extend(self._validate_process_entity(element))
             elif isinstance(element, XORGateway):
                 errors.extend(self._validate_xor_gateway(element))
         
@@ -104,6 +108,14 @@ class ProcessValidator:
         
         if not end_events:
             errors.append("Process must have at least one end event")
+        
+        # Check for required processEntity - must have EXACTLY one in any flow
+        process_entities = [e for e in process.elements if isinstance(e, ProcessEntity)]
+        if len(process_entities) == 0:
+            errors.append("Process must contain exactly one processEntity element")
+        elif len(process_entities) > 1:
+            entity_ids = [e.id for e in process_entities]
+            errors.append(f"Process must contain exactly one processEntity element, found {len(process_entities)}: {', '.join(entity_ids)}")
         
         return errors
     
@@ -126,6 +138,44 @@ class ProcessValidator:
                 errors.append(f"Invalid output mapping source variable name '{mapping.source}' in script call {script.id}")
             if not self._is_valid_variable_name(mapping.target):
                 errors.append(f"Invalid output mapping target variable name '{mapping.target}' in script call {script.id}")
+        
+        return errors
+    
+    def _validate_service_task(self, service: ServiceTask) -> List[str]:
+        """Validate service task element."""
+        errors = []
+        
+        if not service.task_type or not service.task_type.strip():
+            errors.append(f"Service task {service.id} must have a non-empty type")
+        
+        # Validate variable mappings
+        for mapping in service.input_mappings or []:
+            if not self._is_valid_variable_name(mapping.source):
+                errors.append(f"Invalid input mapping source variable name '{mapping.source}' in service task {service.id}")
+            if not self._is_valid_variable_name(mapping.target):
+                errors.append(f"Invalid input mapping target variable name '{mapping.target}' in service task {service.id}")
+        
+        for mapping in service.output_mappings or []:
+            if not self._is_valid_variable_name(mapping.source):
+                errors.append(f"Invalid output mapping source variable name '{mapping.source}' in service task {service.id}")
+            if not self._is_valid_variable_name(mapping.target):
+                errors.append(f"Invalid output mapping target variable name '{mapping.target}' in service task {service.id}")
+        
+        return errors
+    
+    def _validate_process_entity(self, entity: ProcessEntity) -> List[str]:
+        """Validate process entity element."""
+        errors = []
+        
+        if not entity.task_type or not entity.task_type.strip():
+            errors.append(f"Process entity {entity.id} must have a non-empty type")
+        
+        if not entity.entity_model or not entity.entity_model.strip():
+            errors.append(f"Process entity {entity.id} must have a non-empty entityModel path")
+        
+        # Validate that entityModel looks like a file path
+        if entity.entity_model and not (entity.entity_model.endswith('.yaml') or entity.entity_model.endswith('.yml') or entity.entity_model.endswith('.json')):
+            errors.append(f"Process entity {entity.id} entityModel should be a path to an OpenAPI file (.yaml, .yml, or .json)")
         
         return errors
     
@@ -192,6 +242,9 @@ class ProcessValidator:
             if unreachable:
                 errors.append(f"Unreachable elements: {', '.join(unreachable)}")
         
+        # Validate processEntity positioning
+        errors.extend(self._validate_process_entity_positioning(process, outgoing))
+        
         return errors
     
     def _validate_zeebe_compatibility(self, process: Process) -> List[str]:
@@ -243,6 +296,53 @@ class ProcessValidator:
             stack.extend(outgoing.get(current, []))
         
         return visited
+    
+    def _validate_process_entity_positioning(self, process: Process, outgoing: Dict[str, List[str]]) -> List[str]:
+        """Validate that the processEntity element is positioned correctly.
+        
+        Since there must be exactly one processEntity, it must be the first task after a start task.
+        """
+        errors = []
+        
+        # Find all ProcessEntity elements
+        process_entities = [e for e in process.elements if isinstance(e, ProcessEntity)]
+        if not process_entities:
+            return errors  # No processEntity elements to validate (this will be caught by other validation)
+        
+        # Find all start events
+        start_events = [e for e in process.elements if isinstance(e, StartEvent)]
+        if not start_events:
+            return errors  # No start events (this will be caught by other validation)
+        
+        # Create element lookup
+        element_lookup = {e.id: e for e in process.elements}
+        
+        # Since there should be exactly one processEntity, validate its positioning
+        for entity in process_entities:
+            is_valid_position = False
+            
+            # Check if this processEntity is directly connected from any start event
+            for start in start_events:
+                if start.id in outgoing:
+                    direct_targets = outgoing[start.id]
+                    if entity.id in direct_targets:
+                        is_valid_position = True
+                        break
+            
+            if not is_valid_position:
+                errors.append(f"ProcessEntity '{entity.id}' must be the first task after a start event")
+        
+        # Check that all start events lead to processEntity (since it must be the first task)
+        for start in start_events:
+            if start.id in outgoing:
+                direct_targets = outgoing[start.id]
+                for target_id in direct_targets:
+                    target_element = element_lookup.get(target_id)
+                    if target_element and not isinstance(target_element, (ProcessEntity, EndEvent)):
+                        # There's a non-processEntity, non-EndEvent task directly after start
+                        errors.append(f"ProcessEntity must be the first task after start events. Found '{target_element.__class__.__name__}' '{target_id}' directly after start event '{start.id}'")
+        
+        return errors
     
     def _is_valid_xml_id(self, id_str: str) -> bool:
         """Check if string is a valid XML ID."""

@@ -16,6 +16,7 @@ element: start_element
        | end_element  
        | script_call
        | service_task
+       | process_entity
        | xor_gateway
 
 start_element: "start" STRING "{" start_properties "}"
@@ -30,6 +31,9 @@ script_properties: element_id? script_code? (input_mappings | input_vars)? (outp
 service_task: "serviceTask" STRING "{" service_properties "}"
 service_properties: element_id? task_type? task_retries? task_headers? (input_mappings | input_vars)? (output_mappings | output_vars)?
 
+process_entity: "processEntity" STRING "{" process_entity_properties "}"
+process_entity_properties: element_id? entity_type? entity_model?
+
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties: element_id? gateway_condition?
 
@@ -43,6 +47,8 @@ result_variable: "resultVariable:" STRING
 task_type: "type:" STRING
 task_retries: "retries:" NUMBER
 task_headers: "headers:" header_array
+entity_type: "type:" STRING
+entity_model: "entityModel:" STRING
 gateway_condition: "when:" STRING
 
 flow_section: "flow" "{" flow_definition* "}"

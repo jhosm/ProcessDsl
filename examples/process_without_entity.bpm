@@ -1,0 +1,22 @@
+process "Process Without Entity" {
+    id: "process-without-entity"
+    version: "1.0"
+
+    start "Start Process" {
+        id: "start-event"
+    }
+
+    scriptCall "Some Task" {
+        id: "some-task"
+        script: "doSomething()"
+    }
+
+    end "End Process" {
+        id: "end-event"
+    }
+
+    flow {
+        "start-event" -> "some-task"
+        "some-task" -> "end-event"
+    }
+}

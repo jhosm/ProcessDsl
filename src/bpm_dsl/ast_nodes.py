@@ -98,6 +98,19 @@ class ServiceTask(Element):
 
 
 @dataclass
+class ProcessEntity(Element):
+    """Process entity element that translates to a serviceTask in Camunda.
+    
+    This element must always be the first task after a start task and contains:
+    - id: Element identifier
+    - type: Job worker type
+    - entity_model: Path to OpenAPI file
+    """
+    task_type: str
+    entity_model: str  # Path to OpenAPI file
+
+
+@dataclass
 class XORGateway(Element):
     """Exclusive (XOR) gateway element."""
     condition: Optional[str] = None

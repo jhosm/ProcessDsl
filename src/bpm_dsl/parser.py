@@ -8,7 +8,7 @@ from lark import Lark, Transformer, v_args
 from lark.exceptions import LarkError
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, 
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, 
     Flow, Element, ASTNode, VariableMapping, TaskHeader
 )
 
@@ -138,6 +138,17 @@ class BPMTransformer(Transformer):
         )
     
     @v_args(inline=True)
+    def process_entity(self, name: str, properties: dict) -> ProcessEntity:
+        """Create a ProcessEntity node."""
+        element_id = properties.get('id', to_kebab_case(name))
+        return ProcessEntity(
+            name=name,
+            id=element_id,
+            task_type=properties.get('entity_type', ''),
+            entity_model=properties.get('entity_model', '')
+        )
+    
+    @v_args(inline=True)
     def xor_gateway(self, name: str, properties: dict) -> XORGateway:
         """Create an XORGateway node."""
         element_id = properties.get('id', to_kebab_case(name))
@@ -161,6 +172,10 @@ class BPMTransformer(Transformer):
     
     def service_properties(self, items) -> dict:
         """Extract service task properties."""
+        return self._extract_properties(items)
+    
+    def process_entity_properties(self, items) -> dict:
+        """Extract process entity properties."""
         return self._extract_properties(items)
     
     def gateway_properties(self, items) -> dict:
@@ -226,6 +241,16 @@ class BPMTransformer(Transformer):
     def task_headers(self, headers_list: List[TaskHeader]) -> dict:
         """Extract service task headers."""
         return {'headers': headers_list}
+    
+    @v_args(inline=True)
+    def entity_type(self, type_value: str) -> dict:
+        """Extract process entity type."""
+        return {'entity_type': type_value}
+    
+    @v_args(inline=True)
+    def entity_model(self, model_path: str) -> dict:
+        """Extract process entity model path."""
+        return {'entity_model': model_path}
     
     @v_args(inline=True)
     def gateway_condition(self, when: str) -> dict:

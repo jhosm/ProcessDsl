@@ -6,7 +6,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree, re
 from xml.dom import minidom
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, 
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, 
     Flow, Element as BPMElement
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig
@@ -109,6 +109,8 @@ class BPMNGenerator:
                 self._add_script_task(parent, element)
             elif isinstance(element, ServiceTask):
                 self._add_service_task(parent, element)
+            elif isinstance(element, ProcessEntity):
+                self._add_process_entity(parent, element)
             elif isinstance(element, XORGateway):
                 self._add_xor_gateway(parent, element)
     
@@ -193,6 +195,34 @@ class BPMNGenerator:
                 output_param = SubElement(io_mapping, "zeebe:output")
                 output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
                 output_param.set("target", mapping.target)  # Process variable
+    
+    def _add_process_entity(self, parent: Element, process_entity: ProcessEntity) -> None:
+        """Add a process entity as a service task to the process.
+        
+        ProcessEntity translates to a serviceTask in Camunda with:
+        - The specified job worker type
+        - A special header containing the OpenAPI model path
+        """
+        service_task = SubElement(parent, "serviceTask")
+        service_task.set("id", process_entity.id)
+        service_task.set("name", process_entity.name)
+        
+        # Add Zeebe extension elements
+        extension_elements = SubElement(service_task, "extensionElements")
+        
+        # Add Zeebe task definition
+        zeebe_task_def = SubElement(extension_elements, "zeebe:taskDefinition")
+        zeebe_task_def.set("type", process_entity.task_type)
+        # ProcessEntity uses default retries (3)
+        zeebe_task_def.set("retries", "3")
+        
+        # Add task headers with the entity model path
+        zeebe_headers = SubElement(extension_elements, "zeebe:taskHeaders")
+        
+        # Add the entityModel header
+        entity_model_header = SubElement(zeebe_headers, "zeebe:header")
+        entity_model_header.set("key", "entityModel")
+        entity_model_header.set("value", process_entity.entity_model)
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
         """Add an exclusive gateway to the process."""

@@ -1,0 +1,36 @@
+process "Process With Multiple Entities" {
+    id: "process-multiple-entities"
+    version: "1.0"
+
+    start "Start Process" {
+        id: "start-event"
+    }
+
+    processEntity "Load Customer Data" {
+        id: "load-customer"
+        type: "customer-data-processor"
+        entityModel: "/api/specs/customer-api.yaml"
+    }
+
+    processEntity "Load Product Data" {
+        id: "load-product"
+        type: "product-data-processor"
+        entityModel: "/api/specs/product-api.yaml"
+    }
+
+    scriptCall "Process Data" {
+        id: "process-data"
+        script: "processData()"
+    }
+
+    end "End Process" {
+        id: "end-event"
+    }
+
+    flow {
+        "start-event" -> "load-customer"
+        "load-customer" -> "load-product"
+        "load-product" -> "process-data"
+        "process-data" -> "end-event"
+    }
+}

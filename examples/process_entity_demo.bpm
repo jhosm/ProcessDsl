@@ -1,0 +1,31 @@
+process "Process Entity Demo" {
+    id: "process-entity-demo"
+    version: "1.0"
+
+    start "Start Process" {
+        id: "start-event"
+    }
+
+    processEntity "Load Customer Data" {
+        id: "load-customer"
+        type: "customer-data-processor"
+        entityModel: "/api/specs/customer-api.yaml"
+    }
+
+    scriptCall "Process Customer" {
+        id: "process-customer"
+        script: "customerScore = calculateScore(customerData)"
+        inputVars: ["customerData"]
+        outputVars: ["customerScore"]
+    }
+
+    end "End Process" {
+        id: "end-event"
+    }
+
+    flow {
+        "start-event" -> "load-customer"
+        "load-customer" -> "process-customer"
+        "process-customer" -> "end-event"
+    }
+}
