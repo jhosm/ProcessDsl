@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from collections import defaultdict, deque
 import math
 
-from .ast_nodes import Process, Element, StartEvent, EndEvent, ScriptCall, XORGateway, Flow
+from .ast_nodes import Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, Flow
 
 
 @dataclass
@@ -112,6 +112,7 @@ class LayoutConfig:
         StartEvent: {'width': 36, 'height': 36},
         EndEvent: {'width': 36, 'height': 36},
         ScriptCall: {'width': 100, 'height': 80},
+        ServiceTask: {'width': 100, 'height': 80},
         XORGateway: {'width': 50, 'height': 50}
     }
     

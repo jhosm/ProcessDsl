@@ -15,6 +15,7 @@ process_version: "version:" STRING
 element: start_element
        | end_element  
        | script_call
+       | service_task
        | xor_gateway
 
 start_element: "start" STRING "{" start_properties "}"
@@ -26,6 +27,9 @@ end_properties: element_id?
 script_call: "scriptCall" STRING "{" script_properties "}"
 script_properties: element_id? script_code? (input_mappings | input_vars)? (output_mappings | output_vars)? result_variable?
 
+service_task: "serviceTask" STRING "{" service_properties "}"
+service_properties: element_id? task_type? task_retries? task_headers? (input_mappings | input_vars)? (output_mappings | output_vars)?
+
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties: element_id? gateway_condition?
 
@@ -36,6 +40,9 @@ output_mappings: "outputMappings:" mapping_array
 input_vars: "inputVars:" string_array
 output_vars: "outputVars:" string_array
 result_variable: "resultVariable:" STRING
+task_type: "type:" STRING
+task_retries: "retries:" NUMBER
+task_headers: "headers:" header_array
 gateway_condition: "when:" STRING
 
 flow_section: "flow" "{" flow_definition* "}"
@@ -44,10 +51,13 @@ flow_condition: "[" "when:" STRING "]" | "[" DEFAULT "]"
 
 string_array: "[" (STRING ("," STRING)*)? "]"
 mapping_array: "[" (variable_mapping ("," variable_mapping)*)? "]"
+header_array: "[" (task_header ("," task_header)*)? "]"
 variable_mapping: STRING "->" STRING
+task_header: STRING "->" STRING
 
 // Terminals
 STRING: /"[^"]*"/
+NUMBER: /\d+/
 DEFAULT: "default"
 COMMENT: /\/\/[^\n]*/
 

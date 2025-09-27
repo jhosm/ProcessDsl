@@ -1,0 +1,60 @@
+process "Payment Processing" {
+    id: "payment-process"
+    version: "1.0"
+    
+    start "Payment Request" {
+        id: "start-payment"
+    }
+    
+    serviceTask "Validate Payment" {
+        id: "validate-payment"
+        type: "payment-validator"
+        retries: 5
+        headers: [
+            "method" -> "VISA",
+            "timeout" -> "30s"
+        ]
+        inputVars: ["amount", "cardNumber", "cvv"]
+        outputVars: ["isValid", "validationErrors"]
+    }
+    
+    xorGateway "Payment Valid?" {
+        id: "payment-valid-gateway"
+        when: "isValid == true"
+    }
+    
+    serviceTask "Process Payment" {
+        id: "process-payment"
+        type: "payment-processor"
+        retries: 3
+        headers: [
+            "provider" -> "stripe",
+            "currency" -> "USD"
+        ]
+        inputVars: ["amount", "cardNumber"]
+        outputVars: ["transactionId", "status"]
+    }
+    
+    serviceTask "Send Notification" {
+        id: "send-notification"
+        type: "notification-service"
+        inputVars: ["transactionId", "customerEmail"]
+    }
+    
+    end "Payment Completed" {
+        id: "end-success"
+    }
+    
+    end "Payment Failed" {
+        id: "end-failure"
+    }
+    
+    flow {
+        "start-payment" -> "validate-payment"
+        "validate-payment" -> "payment-valid-gateway"
+        "payment-valid-gateway" -> "process-payment" [when: "isValid == true"]
+        "payment-valid-gateway" -> "end-failure" [default]
+        "process-payment" -> "send-notification"
+        "send-notification" -> "end-success"
+    }
+}

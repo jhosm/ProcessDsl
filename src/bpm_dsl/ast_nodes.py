@@ -71,6 +71,33 @@ class ScriptCall(Element):
 
 
 @dataclass
+class TaskHeader(ASTNode):
+    """Task header key-value pair for service tasks."""
+    key: str
+    value: str
+
+
+@dataclass
+class ServiceTask(Element):
+    """Service task element for external job workers."""
+    task_type: str
+    retries: Optional[int] = None
+    headers: Optional[List[TaskHeader]] = None
+    input_mappings: Optional[List[VariableMapping]] = None
+    output_mappings: Optional[List[VariableMapping]] = None
+    
+    def __post_init__(self):
+        if self.retries is None:
+            self.retries = 3
+        if self.headers is None:
+            self.headers = []
+        if self.input_mappings is None:
+            self.input_mappings = []
+        if self.output_mappings is None:
+            self.output_mappings = []
+
+
+@dataclass
 class XORGateway(Element):
     """Exclusive (XOR) gateway element."""
     condition: Optional[str] = None

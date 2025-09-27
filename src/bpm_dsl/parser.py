@@ -8,8 +8,8 @@ from lark import Lark, Transformer, v_args
 from lark.exceptions import LarkError
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, XORGateway, 
-    Flow, Element, ASTNode, VariableMapping
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, 
+    Flow, Element, ASTNode, VariableMapping, TaskHeader
 )
 
 
@@ -38,6 +38,11 @@ class BPMTransformer(Transformer):
     def STRING(self, s):
         """Remove quotes from string literals."""
         return s[1:-1]  # Remove surrounding quotes
+    
+    @v_args(inline=True)
+    def NUMBER(self, n):
+        """Convert number token to integer."""
+        return int(n)
     
     @v_args(inline=True)
     def process(self, name: str, body: dict) -> Process:
@@ -119,6 +124,20 @@ class BPMTransformer(Transformer):
         )
     
     @v_args(inline=True)
+    def service_task(self, name: str, properties: dict) -> ServiceTask:
+        """Create a ServiceTask node."""
+        element_id = properties.get('id', to_kebab_case(name))
+        return ServiceTask(
+            name=name,
+            id=element_id,
+            task_type=properties.get('task_type', ''),
+            retries=properties.get('retries'),
+            headers=properties.get('headers', []),
+            input_mappings=properties.get('input_mappings', []),
+            output_mappings=properties.get('output_mappings', [])
+        )
+    
+    @v_args(inline=True)
     def xor_gateway(self, name: str, properties: dict) -> XORGateway:
         """Create an XORGateway node."""
         element_id = properties.get('id', to_kebab_case(name))
@@ -138,6 +157,10 @@ class BPMTransformer(Transformer):
     
     def script_properties(self, items) -> dict:
         """Extract script call properties."""
+        return self._extract_properties(items)
+    
+    def service_properties(self, items) -> dict:
+        """Extract service task properties."""
         return self._extract_properties(items)
     
     def gateway_properties(self, items) -> dict:
@@ -190,6 +213,21 @@ class BPMTransformer(Transformer):
         return {'result_variable': result_var}
     
     @v_args(inline=True)
+    def task_type(self, type_value: str) -> dict:
+        """Extract service task type."""
+        return {'task_type': type_value}
+    
+    @v_args(inline=True)
+    def task_retries(self, retries_value) -> dict:
+        """Extract service task retries."""
+        return {'retries': int(retries_value)}
+    
+    @v_args(inline=True)
+    def task_headers(self, headers_list: List[TaskHeader]) -> dict:
+        """Extract service task headers."""
+        return {'headers': headers_list}
+    
+    @v_args(inline=True)
     def gateway_condition(self, when: str) -> dict:
         """Extract gateway when condition."""
         return {'condition': when}
@@ -239,10 +277,19 @@ class BPMTransformer(Transformer):
         """Create variable mapping array."""
         return [item for item in items if isinstance(item, VariableMapping)]
     
+    def header_array(self, items) -> List[TaskHeader]:
+        """Create task header array."""
+        return [item for item in items if isinstance(item, TaskHeader)]
+    
     @v_args(inline=True)
     def variable_mapping(self, source: str, target: str) -> VariableMapping:
         """Create a variable mapping from arrow syntax: 'source' -> 'target'."""
         return VariableMapping(source=source, target=target)
+    
+    @v_args(inline=True)
+    def task_header(self, key: str, value: str) -> TaskHeader:
+        """Create a task header from arrow syntax: 'key' -> 'value'."""
+        return TaskHeader(key=key, value=value)
 
 
 class BPMParser:

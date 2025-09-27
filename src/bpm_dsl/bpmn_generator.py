@@ -6,7 +6,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree, re
 from xml.dom import minidom
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, XORGateway, 
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, 
     Flow, Element as BPMElement
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig
@@ -107,6 +107,8 @@ class BPMNGenerator:
                 self._add_end_event(parent, element)
             elif isinstance(element, ScriptCall):
                 self._add_script_task(parent, element)
+            elif isinstance(element, ServiceTask):
+                self._add_service_task(parent, element)
             elif isinstance(element, XORGateway):
                 self._add_xor_gateway(parent, element)
     
@@ -149,6 +151,45 @@ class BPMNGenerator:
             
             # Output mappings: map local script variables back to process variables
             for mapping in script.output_mappings:
+                output_param = SubElement(io_mapping, "zeebe:output")
+                output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
+                output_param.set("target", mapping.target)  # Process variable
+    
+    def _add_service_task(self, parent: Element, service: ServiceTask) -> None:
+        """Add a service task to the process."""
+        service_task = SubElement(parent, "serviceTask")
+        service_task.set("id", service.id)
+        service_task.set("name", service.name)
+        
+        # Add Zeebe extension elements
+        extension_elements = SubElement(service_task, "extensionElements")
+        
+        # Add Zeebe task definition
+        zeebe_task_def = SubElement(extension_elements, "zeebe:taskDefinition")
+        zeebe_task_def.set("type", service.task_type)
+        if service.retries is not None:
+            zeebe_task_def.set("retries", str(service.retries))
+        
+        # Add task headers if specified
+        if service.headers:
+            zeebe_headers = SubElement(extension_elements, "zeebe:taskHeaders")
+            for header in service.headers:
+                zeebe_header = SubElement(zeebe_headers, "zeebe:header")
+                zeebe_header.set("key", header.key)
+                zeebe_header.set("value", header.value)
+        
+        # Add input/output variable mappings if specified
+        if service.input_mappings or service.output_mappings:
+            io_mapping = SubElement(extension_elements, "zeebe:ioMapping")
+            
+            # Input mappings: map process variables to local task variables
+            for mapping in service.input_mappings:
+                input_param = SubElement(io_mapping, "zeebe:input")
+                input_param.set("source", self._ensure_feel_expression(mapping.source))  # Process variable (needs FEEL expression)
+                input_param.set("target", mapping.target)  # Local variable
+            
+            # Output mappings: map local task variables back to process variables
+            for mapping in service.output_mappings:
                 output_param = SubElement(io_mapping, "zeebe:output")
                 output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
                 output_param.set("target", mapping.target)  # Process variable

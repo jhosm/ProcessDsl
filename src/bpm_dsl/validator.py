@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Set, Dict
 from collections import defaultdict
 
-from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, XORGateway, Flow
+from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, XORGateway, Flow
 
 
 @dataclass
