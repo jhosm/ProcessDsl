@@ -1,21 +1,16 @@
-process "Invalid Process Entity Demo" {
-    id: "invalid-process-entity-demo"
+process "Process Entity Missing Name" {
+    id: "process-entity-missing-name"
     version: "1.0"
 
     start "Start Process" {
         id: "start-event"
     }
 
-    scriptCall "Some Task First" {
-        id: "some-task"
-        script: "doSomething()"
-    }
-
     processEntity "Load Customer Data" {
         id: "load-customer"
         type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
-        entityName: "Customer"
+        // Missing entityName
     }
 
     end "End Process" {
@@ -23,8 +18,7 @@ process "Invalid Process Entity Demo" {
     }
 
     flow {
-        "start-event" -> "some-task"
-        "some-task" -> "load-customer"
+        "start-event" -> "load-customer"
         "load-customer" -> "end-event"
     }
 }

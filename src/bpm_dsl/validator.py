@@ -173,6 +173,9 @@ class ProcessValidator:
         if not entity.entity_model or not entity.entity_model.strip():
             errors.append(f"Process entity {entity.id} must have a non-empty entityModel path")
         
+        if not entity.entity_name or not entity.entity_name.strip():
+            errors.append(f"Process entity {entity.id} must have a non-empty entityName")
+        
         # Validate that entityModel looks like a file path
         if entity.entity_model and not (entity.entity_model.endswith('.yaml') or entity.entity_model.endswith('.yml') or entity.entity_model.endswith('.json')):
             errors.append(f"Process entity {entity.id} entityModel should be a path to an OpenAPI file (.yaml, .yml, or .json)")

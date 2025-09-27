@@ -10,6 +10,7 @@ process "Process Entity Demo" {
         id: "load-customer"
         type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
+        entityName: "Customer"
     }
 
     scriptCall "Process Customer" {

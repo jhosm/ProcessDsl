@@ -10,12 +10,14 @@ process "Process With Multiple Entities" {
         id: "load-customer"
         type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
+        entityName: "Customer"
     }
 
     processEntity "Load Product Data" {
         id: "load-product"
         type: "product-data-processor"
         entityModel: "/api/specs/product-api.yaml"
+        entityName: "Product"
     }
 
     scriptCall "Process Data" {

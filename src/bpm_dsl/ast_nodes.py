@@ -105,9 +105,11 @@ class ProcessEntity(Element):
     - id: Element identifier
     - type: Job worker type
     - entity_model: Path to OpenAPI file
+    - entity_name: Name of the entity
     """
     task_type: str
     entity_model: str  # Path to OpenAPI file
+    entity_name: str   # Name of the entity
 
 
 @dataclass

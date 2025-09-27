@@ -145,7 +145,8 @@ class BPMTransformer(Transformer):
             name=name,
             id=element_id,
             task_type=properties.get('entity_type', ''),
-            entity_model=properties.get('entity_model', '')
+            entity_model=properties.get('entity_model', ''),
+            entity_name=properties.get('entity_name', '')
         )
     
     @v_args(inline=True)
@@ -251,6 +252,11 @@ class BPMTransformer(Transformer):
     def entity_model(self, model_path: str) -> dict:
         """Extract process entity model path."""
         return {'entity_model': model_path}
+    
+    @v_args(inline=True)
+    def entity_name(self, name_value: str) -> dict:
+        """Extract process entity name."""
+        return {'entity_name': name_value}
     
     @v_args(inline=True)
     def gateway_condition(self, when: str) -> dict:

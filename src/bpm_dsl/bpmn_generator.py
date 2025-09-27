@@ -223,6 +223,11 @@ class BPMNGenerator:
         entity_model_header = SubElement(zeebe_headers, "zeebe:header")
         entity_model_header.set("key", "entityModel")
         entity_model_header.set("value", process_entity.entity_model)
+        
+        # Add the entityName header
+        entity_name_header = SubElement(zeebe_headers, "zeebe:header")
+        entity_name_header.set("key", "entityName")
+        entity_name_header.set("value", process_entity.entity_name)
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
         """Add an exclusive gateway to the process."""
