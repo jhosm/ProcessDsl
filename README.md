@@ -17,7 +17,15 @@ A powerful domain-specific language (DSL) for defining business processes that g
 - **Start Event**: Process entry points with configurable properties
 - **End Event**: Process termination points with multiple outcomes
 - **Script Call**: Execute JavaScript/FEEL expressions with advanced variable I/O mapping
+- **Service Task**: External job workers with headers and retries
+- **Process Entity**: Entity validation with OpenAPI schemas
 - **XOR Gateway**: Exclusive decision points with conditional routing
+
+## Important Requirements
+
+**⚠️ OpenAPI Specification Required**: Every `.bpm` file **must** have a corresponding OpenAPI specification file (`.yaml` or `.yml`) with the same base name in the same directory. This ensures API-first design and enables entity validation.
+
+See **[OPENAPI_VALIDATION.md](OPENAPI_VALIDATION.md)** for detailed requirements and examples.
 
 ## Quick Start
 
@@ -185,6 +193,7 @@ bpm_dsl/
 
 - **[DSL_GRAMMAR.md](DSL_GRAMMAR.md)**: Complete EBNF grammar specification
 - **[LAYOUT_ALGORITHM.md](LAYOUT_ALGORITHM.md)**: Detailed layout engine documentation
+- **[OPENAPI_VALIDATION.md](OPENAPI_VALIDATION.md)**: OpenAPI file requirements and validation
 - **[QUICKSTART.md](QUICKSTART.md)**: Quick start guide with examples
 
 ## Examples

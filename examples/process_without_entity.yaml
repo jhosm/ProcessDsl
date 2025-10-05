@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Generic Process API
+  description: API specification for generic process without entity
+  version: 1.0.0
+
+components:
+  schemas:
+    GenericData:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+          example: "data-123"
+        value:
+          type: string
+          description: Generic data value
+          example: "sample value"
+        timestamp:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+paths:
+  /data:
+    get:
+      summary: Retrieve generic data
+      responses:
+        '200':
+          description: Data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericData'

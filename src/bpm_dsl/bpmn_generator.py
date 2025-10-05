@@ -212,7 +212,7 @@ class BPMNGenerator:
         
         ProcessEntity translates to a serviceTask in Camunda with:
         - A default job worker type for entity processing
-        - A special header containing the OpenAPI model path
+        - A special header containing the OpenAPI model path (auto-inferred from process)
         - An automatic XOR gateway for validation error checking
         - An error end event for validation failures
         """
@@ -233,10 +233,12 @@ class BPMNGenerator:
         # Add task headers with the entity model path
         zeebe_headers = SubElement(extension_elements, "zeebe:taskHeaders")
         
-        # Add the entityModel header
+        # Add the entityModel header (using the openapi_file_path from the process)
         entity_model_header = SubElement(zeebe_headers, "zeebe:header")
         entity_model_header.set("key", "entityModel")
-        entity_model_header.set("value", process_entity.entity_model)
+        # Use the openapi_file_path from the process, or empty string if not set
+        openapi_path = self.layout_engine.process.openapi_file_path if hasattr(self.layout_engine, 'process') and self.layout_engine.process else ""
+        entity_model_header.set("value", openapi_path or "")
         
         # Add the entityName header
         entity_name_header = SubElement(zeebe_headers, "zeebe:header")

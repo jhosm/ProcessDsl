@@ -19,6 +19,7 @@ class Process(ASTNode):
     version: Optional[str] = None
     elements: List['Element'] = None
     flows: List['Flow'] = None
+    openapi_file_path: Optional[str] = None  # Path to the OpenAPI YAML file
     
     def __post_init__(self):
         if self.elements is None:
@@ -103,10 +104,10 @@ class ProcessEntity(Element):
     
     This element must always be the first task after a start task and contains:
     - id: Element identifier (auto-generated from name in kebab-case)
-    - entity_model: Path to OpenAPI file
     - entity_name: Name of the entity
+    
+    The OpenAPI file path is automatically inferred from the process definition.
     """
-    entity_model: str  # Path to OpenAPI file
     entity_name: str   # Name of the entity
 
 

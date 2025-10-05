@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: Invalid Process Entity Test API
+  description: API specification for testing invalid process entity scenarios
+  version: 1.0.0
+
+components:
+  schemas:
+    Customer:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique customer identifier
+          example: "cust-12345"
+        name:
+          type: string
+          description: Customer name
+          example: "Jane Doe"
+        email:
+          type: string
+          format: email
+          description: Customer email
+          example: "jane.doe@example.com"
+
+paths:
+  /customers:
+    post:
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '201':
+          description: Customer created successfully

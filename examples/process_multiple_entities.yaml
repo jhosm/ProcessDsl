@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: Multi-Entity Process API
+  description: API specification for processes with multiple entities
+  version: 1.0.0
+
+components:
+  schemas:
+    Customer:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+          description: Unique customer identifier
+          example: "cust-12345"
+        name:
+          type: string
+          description: Customer full name
+          minLength: 1
+          maxLength: 100
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: Customer email address
+          example: "john.doe@example.com"
+        status:
+          type: string
+          enum: ["active", "inactive", "suspended"]
+          description: Customer account status
+          default: "active"
+
+    Product:
+      type: object
+      required:
+        - id
+        - name
+        - price
+      properties:
+        id:
+          type: string
+          description: Unique product identifier
+          example: "prod-67890"
+        name:
+          type: string
+          description: Product name
+          minLength: 1
+          maxLength: 200
+          example: "Premium Widget"
+        price:
+          type: number
+          format: double
+          description: Product price
+          minimum: 0
+          example: 29.99
+        category:
+          type: string
+          description: Product category
+          example: "Electronics"
+        inStock:
+          type: boolean
+          description: Whether product is in stock
+          default: true
+
+paths:
+  /customers:
+    post:
+      summary: Create a new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '201':
+          description: Customer created successfully
+
+  /products:
+    post:
+      summary: Create a new product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Product created successfully

@@ -3,28 +3,24 @@ process "Process Entity Demo" {
     version: "1.0"
 
     start "Start Process" {
-        id: "start-event"
     }
 
     processEntity "Load Customer Data" {
-        entityModel: "customer-api.yaml"
         entityName: "Customer"
     }
 
     scriptCall "Process Customer" {
-        id: "process-customer"
         script: "customerScore = calculateScore(customerData)"
         inputVars: ["customerData"]
         outputVars: ["customerScore"]
     }
 
     end "End Process" {
-        id: "end-event"
     }
 
     flow {
-        "start-event" -> "load-customer-data"
+        "start-process" -> "load-customer-data"
         "load-customer-data" -> "process-customer"
-        "process-customer" -> "end-event"
+        "process-customer" -> "end-process"
     }
 }

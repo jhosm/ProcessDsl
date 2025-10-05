@@ -12,7 +12,6 @@ process "Invalid Process Entity Demo" {
     }
 
     processEntity "Load Customer Data" {
-        entityModel: "/api/specs/customer-api.yaml"
         entityName: "Customer"
     }
 

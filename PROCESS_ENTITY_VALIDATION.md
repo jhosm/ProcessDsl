@@ -15,14 +15,15 @@ When a `processEntity` is defined in the DSL, the BPMN generator automatically c
    - validation gateway → error end (condition: `entityValidationResult.isValid = false`)
    - validation gateway → next task (default flow when validation succeeds)
 
-## DSL Syntax (Unchanged)
+## DSL Syntax
 
 ```bpm
 processEntity "Load Customer Data" {
-    entityModel: "customer-api.yaml"
     entityName: "Customer"
 }
 ```
+
+**Note**: The `entityModel` path is automatically inferred from the matching OpenAPI YAML file (with the same name as the `.bpm` file). See [OPENAPI_VALIDATION.md](OPENAPI_VALIDATION.md) for details.
 
 ## Generated BPMN XML
 
@@ -156,7 +157,6 @@ process "Process Entity Demo" {
     }
     
     processEntity "Load Customer Data" {
-        entityModel: "customer-api.yaml"
         entityName: "Customer"
     }
     

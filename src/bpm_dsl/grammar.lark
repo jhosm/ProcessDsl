@@ -32,7 +32,7 @@ service_task: "serviceTask" STRING "{" service_properties "}"
 service_properties: element_id? task_type? task_retries? task_headers? (input_mappings | input_vars)? (output_mappings | output_vars)?
 
 process_entity: "processEntity" STRING "{" process_entity_properties "}"
-process_entity_properties: entity_model? entity_name?
+process_entity_properties: entity_name?
 
 xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
 gateway_properties: element_id? gateway_condition?

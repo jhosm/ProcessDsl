@@ -31,8 +31,9 @@ def to_kebab_case(name: str) -> str:
 class BPMTransformer(Transformer):
     """Transforms the parse tree into AST nodes."""
     
-    def __init__(self):
+    def __init__(self, openapi_file_path: Optional[str] = None):
         super().__init__()
+        self.openapi_file_path = openapi_file_path
     
     @v_args(inline=True)
     def STRING(self, s):
@@ -52,7 +53,8 @@ class BPMTransformer(Transformer):
             id=body.get('id', f"process_{name.lower().replace(' ', '_')}"),
             version=body.get('version'),
             elements=body.get('elements', []),
-            flows=body.get('flows', [])
+            flows=body.get('flows', []),
+            openapi_file_path=self.openapi_file_path
         )
     
     def process_body(self, items) -> dict:
@@ -145,7 +147,6 @@ class BPMTransformer(Transformer):
         return ProcessEntity(
             name=name,
             id=element_id,
-            entity_model=properties.get('entity_model', ''),
             entity_name=properties.get('entity_name', '')
         )
     
@@ -248,10 +249,6 @@ class BPMTransformer(Transformer):
         """Extract process entity type."""
         return {'entity_type': type_value}
     
-    @v_args(inline=True)
-    def entity_model(self, model_path: str) -> dict:
-        """Extract process entity model path."""
-        return {'entity_model': model_path}
     
     @v_args(inline=True)
     def entity_name(self, name_value: str) -> dict:
@@ -326,7 +323,7 @@ class BPMTransformer(Transformer):
 class BPMParser:
     """Main parser for BPM DSL files."""
     
-    def __init__(self):
+    def __init__(self, openapi_file_path: Optional[str] = None):
         """Initialize the parser with the grammar."""
         grammar_path = Path(__file__).parent / "grammar.lark"
         with open(grammar_path, 'r') as f:
@@ -335,21 +332,68 @@ class BPMParser:
         self.parser = Lark(
             grammar,
             parser='lalr',
-            transformer=BPMTransformer(),
+            transformer=BPMTransformer(openapi_file_path),
             start='start'
         )
     
     def parse_file(self, file_path: Union[str, Path]) -> Process:
-        """Parse a BPM DSL file and return the AST."""
+        """Parse a BPM DSL file and return the AST.
+        
+        Validates that a corresponding OpenAPI YAML file exists with the same base name.
+        """
         file_path = Path(file_path)
         
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
         
+        # Validate and get the OpenAPI YAML file path
+        openapi_file_path = self._validate_openapi_file(file_path)
+        
+        # Re-initialize parser with the OpenAPI file path
+        grammar_path = Path(__file__).parent / "grammar.lark"
+        with open(grammar_path, 'r') as f:
+            grammar = f.read()
+        
+        self.parser = Lark(
+            grammar,
+            parser='lalr',
+            transformer=BPMTransformer(str(openapi_file_path)),
+            start='start'
+        )
+        
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
         return self.parse_string(content)
+    
+    def _validate_openapi_file(self, bpm_file_path: Path) -> Path:
+        """Validate that a matching OpenAPI YAML file exists for the .bpm file.
+        
+        Args:
+            bpm_file_path: Path to the .bpm file
+            
+        Returns:
+            Path: The path to the matching OpenAPI file
+            
+        Raises:
+            FileNotFoundError: If no matching .yaml or .yml file is found
+        """
+        base_name = bpm_file_path.stem  # Get filename without extension
+        parent_dir = bpm_file_path.parent
+        
+        # Check for .yaml or .yml extensions
+        yaml_file = parent_dir / f"{base_name}.yaml"
+        yml_file = parent_dir / f"{base_name}.yml"
+        
+        if yaml_file.exists():
+            return yaml_file
+        elif yml_file.exists():
+            return yml_file
+        else:
+            raise FileNotFoundError(
+                f"Missing OpenAPI specification file for '{bpm_file_path.name}'. "
+                f"Expected '{yaml_file.name}' or '{yml_file.name}' in the same directory."
+            )
     
     def parse_string(self, content: str) -> Process:
         """Parse a BPM DSL string and return the AST."""

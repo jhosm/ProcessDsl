@@ -7,8 +7,7 @@ process "Process Entity Missing Name" {
     }
 
     processEntity "Load Customer Data" {
-        entityModel: "/api/specs/customer-api.yaml"
-        // Missing entityName
+        // Missing entityName to test validation
     }
 
     end "End Process" {

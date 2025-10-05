@@ -7,12 +7,10 @@ process "Process With Multiple Entities" {
     }
 
     processEntity "Load Customer Data" {
-        entityModel: "/api/specs/customer-api.yaml"
         entityName: "Customer"
     }
 
     processEntity "Load Product Data" {
-        entityModel: "/api/specs/product-api.yaml"
         entityName: "Product"
     }
 
