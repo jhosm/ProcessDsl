@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_customer-onboarding" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
+  <error id="process-entity-validation-error" name="Process Entity Validation Error" errorCode="PROCESS_ENTITY_VALIDATION_ERROR"/>
+  <process id="customer-onboarding" name="Customer Onboarding" isExecutable="true">
+    <startEvent id="start-onboarding" name="Start Onboarding"/>
+    <serviceTask id="validate-customer" name="Validate Customer">
+      <extensionElements>
+        <zeebe:taskDefinition type="process-entity-validator" retries="3"/>
+        <zeebe:taskHeaders>
+          <zeebe:header key="entityModel" value="examples/customer_process/customer_process.yaml"/>
+          <zeebe:header key="entityName" value="Customer"/>
+        </zeebe:taskHeaders>
+        <zeebe:ioMapping>
+          <zeebe:input source="=processEntity" target="processEntity"/>
+          <zeebe:output source="=validationResult" target="entityValidationResult"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </serviceTask>
+    <exclusiveGateway id="validate-customer-validation-gateway" name="Validation Check" default="flow_validate-customer-validation-gateway_to_complete"/>
+    <endEvent id="validate-customer-validation-error" name="Validation Error">
+      <errorEventDefinition id="validate-customer-validation-error-def" errorRef="process-entity-validation-error"/>
+    </endEvent>
+    <endEvent id="complete" name="Complete"/>
+    <sequenceFlow id="flow_start-onboarding_to_validate-customer" sourceRef="start-onboarding" targetRef="validate-customer"/>
+    <sequenceFlow id="flow_validate-customer_to_validate-customer-validation-gateway" sourceRef="validate-customer" targetRef="validate-customer-validation-gateway"/>
+    <sequenceFlow id="flow_validate-customer-validation-gateway_to_validate-customer-validation-error" sourceRef="validate-customer-validation-gateway" targetRef="validate-customer-validation-error">
+      <conditionExpression xsi:type="tFormalExpression">=entityValidationResult.isValid = false</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_validate-customer-validation-gateway_to_complete" sourceRef="validate-customer-validation-gateway" targetRef="complete"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram_customer-onboarding">
+    <bpmndi:BPMNPlane id="plane_customer-onboarding" bpmnElement="customer-onboarding">
+      <bpmndi:BPMNShape id="shape_start-onboarding" bpmnElement="start-onboarding">
+        <dc:Bounds x="50" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_validate-customer" bpmnElement="validate-customer">
+        <dc:Bounds x="286" y="150" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_complete" bpmnElement="complete">
+        <dc:Bounds x="586" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_validate-customer-validation-gateway" bpmnElement="validate-customer-validation-gateway">
+        <dc:Bounds x="466" y="165" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_validate-customer-validation-error" bpmnElement="validate-customer-validation-error">
+        <dc:Bounds x="473" y="275" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_start-onboarding_to_validate-customer" bpmnElement="flow_start-onboarding_to_validate-customer">
+        <di:waypoint x="86" y="168"/>
+        <di:waypoint x="186" y="168"/>
+        <di:waypoint x="186" y="190"/>
+        <di:waypoint x="286" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_validate-customer_to_validate-customer-validation-gateway" bpmnElement="flow_validate-customer_to_validate-customer-validation-gateway">
+        <di:waypoint x="386" y="190"/>
+        <di:waypoint x="466" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_validate-customer-validation-gateway_to_validate-customer-validation-error" bpmnElement="flow_validate-customer-validation-gateway_to_validate-customer-validation-error">
+        <di:waypoint x="491" y="215"/>
+        <di:waypoint x="491" y="275"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_validate-customer-validation-gateway_to_complete" bpmnElement="flow_validate-customer-validation-gateway_to_complete">
+        <di:waypoint x="516" y="190"/>
+        <di:waypoint x="586" y="168"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

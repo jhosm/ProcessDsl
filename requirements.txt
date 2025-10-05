@@ -4,6 +4,9 @@ lark-parser==1.1.7
 # XML generation and manipulation
 lxml==4.9.3
 
+# YAML parsing
+PyYAML==6.0.1
+
 # CLI framework
 click==8.1.7
 

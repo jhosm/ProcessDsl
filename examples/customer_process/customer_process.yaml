@@ -1,0 +1,33 @@
+openapi: 3.0.3
+info:
+  title: Customer API
+  version: 1.0.0
+
+components:
+  schemas:
+    Customer:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+paths:
+  /customers:
+    post:
+      operationId: customersPost
+      x-process-id: customer-onboarding  # Links to process
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '201':
+          description: Customer created

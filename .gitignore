@@ -174,3 +174,44 @@ ehthumbs.db
 Thumbs.db
 
 node_modules/
+
+# C# / .NET
+*.dll
+*.exe
+*.pdb
+*.user
+*.aps
+*.pch
+*.vspscc
+*_i.c
+*_p.c
+*.ncb
+*.suo
+*.tlb
+*.tlh
+*.bak
+*.cache
+*.ilk
+*.log
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.pidb
+*.userprefs
+.vs/
+
+# OpenAPI Generator output
+src/microservices/*/Generated/
+
+# Local NuGet packages
+packages/
+
+# Test Results & Coverage
+**/TestResults/
+coverage.cobertura.xml
+*.coverage
+*.coveragexml
+**/examples/**/src/
+src/ProcessDsl.Orchestration/nupkg/ProcessDsl.Orchestration.1.1.0.nupkg
+src/ProcessDsl.Orchestration/nupkg/ProcessDsl.Orchestration.1.0.0.nupkg

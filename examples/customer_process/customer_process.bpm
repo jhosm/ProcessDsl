@@ -1,0 +1,19 @@
+process "Customer Onboarding" {
+    id: "customer-onboarding"
+    version: "1.0"
+    
+    start "Start Onboarding" {
+    }
+    
+    processEntity "Validate Customer" {
+        entityName: "Customer"
+    }
+    
+    end "Complete" {
+    }
+    
+    flow {
+        "start-onboarding" -> "validate-customer"
+        "validate-customer" -> "complete"
+    }
+}

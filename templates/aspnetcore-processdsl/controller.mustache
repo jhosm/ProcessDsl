@@ -1,0 +1,132 @@
+{{>partial_header}}
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+{{#operationResultTask}}
+using System.Threading;
+using System.Threading.Tasks;
+{{/operationResultTask}}
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using System.Net.Http;
+using ProcessDsl.Orchestration;
+{{#useSwashbuckle}}
+using Swashbuckle.AspNetCore.Annotations;
+using Swashbuckle.AspNetCore.SwaggerGen;
+{{/useSwashbuckle}}
+{{^isLibrary}}
+{{#useNewtonsoft}}
+using Newtonsoft.Json;
+{{/useNewtonsoft}}
+{{^useNewtonsoft}}
+using System.Text.Json;
+{{/useNewtonsoft}}
+{{/isLibrary}}
+using {{packageName}}.Attributes;
+using {{modelPackage}};
+
+namespace {{apiPackage}}
+{ {{#operations}}
+    /// <summary>
+    /// {{description}}
+    /// </summary>{{#description}}
+    [Description("{{.}}")]{{/description}}
+    [ApiController]
+    public {{#classModifier}}{{.}} {{/classModifier}}class {{classname}}Controller : ControllerBase
+    { 
+        private readonly IProcessOrchestrator _orchestrator;
+        private readonly ILogger<{{classname}}Controller> _logger;
+        
+        public {{classname}}Controller(IProcessOrchestrator orchestrator, ILogger<{{classname}}Controller> logger)
+        {
+            _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+{{#operation}}
+        /// <summary>
+        /// {{summary}}
+        /// </summary>{{#notes}}
+        /// <remarks>{{.}}</remarks>{{/notes}}{{#allParams}}
+        /// <param name="{{paramName}}">{{description}}{{#isDeprecated}} (deprecated){{/isDeprecated}}</param>{{/allParams}}{{#operationResultTask}}{{#operationIsAsync}}
+        /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>{{/operationIsAsync}}{{/operationResultTask}}{{#responses}}
+        /// <response code="{{code}}">{{message}}</response>{{/responses}}
+        [{{httpMethod}}]
+        [Route("{{{basePathWithoutHost}}}{{{path}}}")]
+{{#authMethods}}
+{{#isApiKey}}
+        [Authorize(Policy = "{{name}}")]
+{{/isApiKey}}
+{{#isBasicBearer}}
+        [Authorize{{#scopes}}{{#-first}}(Roles = "{{/-first}}{{scope}}{{^-last}},{{/-last}}{{#-last}}"){{/-last}}{{/scopes}}]
+{{/isBasicBearer}}
+{{/authMethods}}
+        {{#vendorExtensions.x-aspnetcore-consumes}}
+        [Consumes({{&vendorExtensions.x-aspnetcore-consumes}})]
+        {{/vendorExtensions.x-aspnetcore-consumes}}
+        [ValidateModelState]{{#useSwashbuckle}}
+        [SwaggerOperation("{{operationId}}")]{{#responses}}{{#dataType}}
+        [SwaggerResponse(statusCode: {{code}}, type: typeof({{&dataType}}), description: "{{message}}")]{{/dataType}}{{/responses}}{{/useSwashbuckle}}{{^useSwashbuckle}}{{#responses}}{{#dataType}}
+        [ProducesResponseType(statusCode: {{code}}, type: typeof({{&dataType}}))]{{/dataType}}{{/responses}}{{/useSwashbuckle}}
+        {{#isDeprecated}}
+        [Obsolete]
+        {{/isDeprecated}}
+        public {{operationModifier}} {{#operationResultTask}}{{#operationIsAsync}}async {{/operationIsAsync}}Task<{{/operationResultTask}}IActionResult{{#operationResultTask}}>{{/operationResultTask}} {{operationId}}({{#allParams}}{{>pathParam}}{{>queryParam}}{{>bodyParam}}{{>formParam}}{{>headerParam}}{{^-last}}{{^isCookieParam}}, {{/isCookieParam}}{{/-last}}{{#-last}}{{#operationResultTask}}{{#operationIsAsync}}, {{/operationIsAsync}}{{/operationResultTask}}{{/-last}}{{/allParams}}{{#operationResultTask}}{{#operationIsAsync}}CancellationToken cancellationToken{{/operationIsAsync}}{{/operationResultTask}}){{^generateBody}};{{/generateBody}}
+        {{#generateBody}}
+        {
+            {{#cookieParams}}
+            var {{paramName}} = Request.Cookies["{{paramName}}"];
+            {{/cookieParams}}
+{{#vendorExtensions}}{{#x-process-id}}
+            // ProcessDsl: Start Camunda process
+            try
+            {
+                var processId = "{{.}}";
+                _logger.LogInformation("Starting process {ProcessId} for {Operation}", processId, "{{operationId}}");
+                {{#bodyParams}}
+                var processInstance = _orchestrator.StartProcessForEntityAsync(processId, {{paramName}}).GetAwaiter().GetResult();
+                _logger.LogInformation("Process instance {ProcessInstanceKey} started successfully", processInstance.ProcessInstanceKey);
+                
+                return StatusCode(201, {{paramName}});
+                {{/bodyParams}}
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Failed to start process - Camunda unavailable");
+                return StatusCode(503, new { error = "Process orchestration unavailable", message = "Could not connect to Camunda" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting process {ProcessId}", "{{.}}");
+                return StatusCode(500, new { error = "Internal error", message = ex.Message });
+            }
+{{/x-process-id}}{{/vendorExtensions}}
+{{^vendorExtensions.x-process-id}}
+{{#responses}}
+{{#dataType}}
+            //TODO: Uncomment the next line to return response {{code}} or use other options such as return this.NotFound(), return this.BadRequest(..), ...
+            // return StatusCode({{code}}, default);
+{{/dataType}}
+{{^dataType}}
+            //TODO: Uncomment the next line to return response {{code}} or use other options such as return this.NotFound(), return this.BadRequest(..), ...
+            // return StatusCode({{code}});
+{{/dataType}}
+{{/responses}}
+{{#returnType}}
+            string exampleJson = null;
+            {{#examples}}
+            exampleJson = "{{{example}}}";
+            {{/examples}}
+            {{#isListCollection}}{{>listReturn}}{{/isListCollection}}{{^isListCollection}}{{#isMap}}{{>mapReturn}}{{/isMap}}{{^isMap}}{{>objectReturn}}{{/isMap}}{{/isListCollection}}
+            {{!TODO: defaultResponse, examples, auth, consumes, produces, nickname, externalDocs, imports, security}}
+            //TODO: Change the data returned
+            return {{#operationResultTask}}{{#operationIsAsync}}await {{/operationIsAsync}}Task.FromResult<IActionResult>({{/operationResultTask}}new ObjectResult(example){{#operationResultTask}}){{/operationResultTask}};{{/returnType}}{{^returnType}}
+            throw new NotImplementedException();{{/returnType}}
+{{/vendorExtensions.x-process-id}}
+        }
+        {{/generateBody}}
+        {{/operation}}
+    }
+{{/operations}}
+}

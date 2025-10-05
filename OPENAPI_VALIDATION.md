@@ -141,5 +141,5 @@ paths: {}
 ## Related Features
 
 - **ProcessEntity Validation**: The `processEntity` DSL element references schemas defined in the OpenAPI file
-- **Automatic Path Inference**: The OpenAPI file path is automatically inferred from the `.bpm` file name, eliminating the need for explicit `entityModel` attributes
+- **Automatic Path Inference**: The OpenAPI file path is automatically inferred from the `.bpm` file name
 - **Job Workers**: Job workers receive the OpenAPI file path in the `entityModel` header for runtime validation
