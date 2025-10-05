@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_process-entity-demo" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
+  <error id="process-entity-validation-error" name="Process Entity Validation Error" errorCode="PROCESS_ENTITY_VALIDATION_ERROR"/>
+  <process id="process-entity-demo" name="Process Entity Demo" isExecutable="true">
+    <startEvent id="start-event" name="Start Process"/>
+    <serviceTask id="load-customer-data" name="Load Customer Data">
+      <extensionElements>
+        <zeebe:taskDefinition type="process-entity-validator" retries="3"/>
+        <zeebe:taskHeaders>
+          <zeebe:header key="entityModel" value="customer-api.yaml"/>
+          <zeebe:header key="entityName" value="Customer"/>
+        </zeebe:taskHeaders>
+        <zeebe:ioMapping>
+          <zeebe:input source="=processEntity" target="processEntity"/>
+          <zeebe:output source="=validationResult" target="entityValidationResult"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </serviceTask>
+    <exclusiveGateway id="load-customer-data-validation-gateway" name="Validation Check" default="flow_load-customer-data-validation-gateway_to_process-customer"/>
+    <endEvent id="load-customer-data-validation-error" name="Validation Error">
+      <errorEventDefinition id="load-customer-data-validation-error-def" errorRef="process-entity-validation-error"/>
+    </endEvent>
+    <scriptTask id="process-customer" name="Process Customer">
+      <extensionElements>
+        <zeebe:script expression="=customerScore = calculateScore(customerData)" resultVariable="result"/>
+        <zeebe:ioMapping>
+          <zeebe:input source="=customerData" target="customerData"/>
+          <zeebe:output source="=customerScore" target="customerScore"/>
+        </zeebe:ioMapping>
+      </extensionElements>
+    </scriptTask>
+    <endEvent id="end-event" name="End Process"/>
+    <sequenceFlow id="flow_start-event_to_load-customer-data" sourceRef="start-event" targetRef="load-customer-data"/>
+    <sequenceFlow id="flow_load-customer-data_to_load-customer-data-validation-gateway" sourceRef="load-customer-data" targetRef="load-customer-data-validation-gateway"/>
+    <sequenceFlow id="flow_load-customer-data-validation-gateway_to_load-customer-data-validation-error" sourceRef="load-customer-data-validation-gateway" targetRef="load-customer-data-validation-error">
+      <conditionExpression xsi:type="tFormalExpression">=entityValidationResult.isValid = false</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_load-customer-data-validation-gateway_to_process-customer" sourceRef="load-customer-data-validation-gateway" targetRef="process-customer"/>
+    <sequenceFlow id="flow_process-customer_to_end-event" sourceRef="process-customer" targetRef="end-event"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram_process-entity-demo">
+    <bpmndi:BPMNPlane id="plane_process-entity-demo" bpmnElement="process-entity-demo">
+      <bpmndi:BPMNShape id="shape_start-event" bpmnElement="start-event">
+        <dc:Bounds x="50" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_load-customer-data" bpmnElement="load-customer-data">
+        <dc:Bounds x="286" y="150" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_process-customer" bpmnElement="process-customer">
+        <dc:Bounds x="586" y="150" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end-event" bpmnElement="end-event">
+        <dc:Bounds x="886" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_load-customer-data-validation-gateway" bpmnElement="load-customer-data-validation-gateway">
+        <dc:Bounds x="466" y="165" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_load-customer-data-validation-error" bpmnElement="load-customer-data-validation-error">
+        <dc:Bounds x="473" y="275" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_start-event_to_load-customer-data" bpmnElement="flow_start-event_to_load-customer-data">
+        <di:waypoint x="86" y="168"/>
+        <di:waypoint x="186" y="168"/>
+        <di:waypoint x="186" y="190"/>
+        <di:waypoint x="286" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_process-customer_to_end-event" bpmnElement="flow_process-customer_to_end-event">
+        <di:waypoint x="686" y="190"/>
+        <di:waypoint x="786" y="190"/>
+        <di:waypoint x="786" y="168"/>
+        <di:waypoint x="886" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_load-customer-data_to_load-customer-data-validation-gateway" bpmnElement="flow_load-customer-data_to_load-customer-data-validation-gateway">
+        <di:waypoint x="386" y="190"/>
+        <di:waypoint x="466" y="190"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_load-customer-data-validation-gateway_to_load-customer-data-validation-error" bpmnElement="flow_load-customer-data-validation-gateway_to_load-customer-data-validation-error">
+        <di:waypoint x="491" y="215"/>
+        <di:waypoint x="491" y="275"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_load-customer-data-validation-gateway_to_process-customer" bpmnElement="flow_load-customer-data-validation-gateway_to_process-customer">
+        <di:waypoint x="516" y="190"/>
+        <di:waypoint x="586" y="190"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
