@@ -7,8 +7,6 @@ process "Process Entity Missing Name" {
     }
 
     processEntity "Load Customer Data" {
-        id: "load-customer"
-        type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
         // Missing entityName
     }
@@ -18,7 +16,7 @@ process "Process Entity Missing Name" {
     }
 
     flow {
-        "start-event" -> "load-customer"
-        "load-customer" -> "end-event"
+        "start-event" -> "load-customer-data"
+        "load-customer-data" -> "end-event"
     }
 }

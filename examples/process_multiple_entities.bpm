@@ -7,15 +7,11 @@ process "Process With Multiple Entities" {
     }
 
     processEntity "Load Customer Data" {
-        id: "load-customer"
-        type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
         entityName: "Customer"
     }
 
     processEntity "Load Product Data" {
-        id: "load-product"
-        type: "product-data-processor"
         entityModel: "/api/specs/product-api.yaml"
         entityName: "Product"
     }
@@ -30,9 +26,9 @@ process "Process With Multiple Entities" {
     }
 
     flow {
-        "start-event" -> "load-customer"
-        "load-customer" -> "load-product"
-        "load-product" -> "process-data"
+        "start-event" -> "load-customer-data"
+        "load-customer-data" -> "load-product-data"
+        "load-product-data" -> "process-data"
         "process-data" -> "end-event"
     }
 }

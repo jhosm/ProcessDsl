@@ -12,8 +12,6 @@ process "Invalid Process Entity Demo" {
     }
 
     processEntity "Load Customer Data" {
-        id: "load-customer"
-        type: "customer-data-processor"
         entityModel: "/api/specs/customer-api.yaml"
         entityName: "Customer"
     }
@@ -24,7 +22,7 @@ process "Invalid Process Entity Demo" {
 
     flow {
         "start-event" -> "some-task"
-        "some-task" -> "load-customer"
-        "load-customer" -> "end-event"
+        "some-task" -> "load-customer-data"
+        "load-customer-data" -> "end-event"
     }
 }

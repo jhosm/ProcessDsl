@@ -2,12 +2,18 @@
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="definitions_process-entity-demo" targetNamespace="http://bpmn.io/schema/bpmn" exporter="BPM DSL" exporterVersion="1.0">
   <process id="process-entity-demo" name="Process Entity Demo" isExecutable="true">
     <startEvent id="start-event" name="Start Process"/>
-    <serviceTask id="load-customer" name="Load Customer Data">
+    <serviceTask id="load-customer-data" name="Load Customer Data">
       <extensionElements>
-        <zeebe:taskDefinition type="customer-data-processor" retries="3"/>
+        <zeebe:taskDefinition type="process-entity-validator" retries="3"/>
         <zeebe:taskHeaders>
-          <zeebe:header key="entityModel" value="/api/specs/customer-api.yaml"/>
+          <zeebe:header key="entityModel" value="customer-api.yaml"/>
+          <zeebe:header key="entityName" value="Customer"/>
         </zeebe:taskHeaders>
+        <zeebe:ioMapping>
+          <zeebe:input source="=processEntity" target="processEntity"/>
+          <zeebe:input source="=loadOpenApiSchema(&quot;customer-api.yaml&quot;)" target="openApiSchema"/>
+          <zeebe:output source="=validationResult" target="entityValidationResult"/>
+        </zeebe:ioMapping>
       </extensionElements>
     </serviceTask>
     <scriptTask id="process-customer" name="Process Customer">
@@ -20,8 +26,8 @@
       </extensionElements>
     </scriptTask>
     <endEvent id="end-event" name="End Process"/>
-    <sequenceFlow id="flow_start-event_to_load-customer" sourceRef="start-event" targetRef="load-customer"/>
-    <sequenceFlow id="flow_load-customer_to_process-customer" sourceRef="load-customer" targetRef="process-customer"/>
+    <sequenceFlow id="flow_start-event_to_load-customer-data" sourceRef="start-event" targetRef="load-customer-data"/>
+    <sequenceFlow id="flow_load-customer-data_to_process-customer" sourceRef="load-customer-data" targetRef="process-customer"/>
     <sequenceFlow id="flow_process-customer_to_end-event" sourceRef="process-customer" targetRef="end-event"/>
   </process>
   <bpmndi:BPMNDiagram id="diagram_process-entity-demo">
@@ -29,7 +35,7 @@
       <bpmndi:BPMNShape id="shape_start-event" bpmnElement="start-event">
         <dc:Bounds x="50" y="150" width="36" height="36"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape_load-customer" bpmnElement="load-customer">
+      <bpmndi:BPMNShape id="shape_load-customer-data" bpmnElement="load-customer-data">
         <dc:Bounds x="286" y="150" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_process-customer" bpmnElement="process-customer">
@@ -38,13 +44,13 @@
       <bpmndi:BPMNShape id="shape_end-event" bpmnElement="end-event">
         <dc:Bounds x="886" y="150" width="36" height="36"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="edge_flow_start-event_to_load-customer" bpmnElement="flow_start-event_to_load-customer">
+      <bpmndi:BPMNEdge id="edge_flow_start-event_to_load-customer-data" bpmnElement="flow_start-event_to_load-customer-data">
         <di:waypoint x="86" y="168"/>
         <di:waypoint x="186" y="168"/>
         <di:waypoint x="186" y="190"/>
         <di:waypoint x="286" y="190"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_flow_load-customer_to_process-customer" bpmnElement="flow_load-customer_to_process-customer">
+      <bpmndi:BPMNEdge id="edge_flow_load-customer-data_to_process-customer" bpmnElement="flow_load-customer-data_to_process-customer">
         <di:waypoint x="386" y="190"/>
         <di:waypoint x="586" y="190"/>
       </bpmndi:BPMNEdge>

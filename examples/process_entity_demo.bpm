@@ -7,9 +7,7 @@ process "Process Entity Demo" {
     }
 
     processEntity "Load Customer Data" {
-        id: "load-customer"
-        type: "customer-data-processor"
-        entityModel: "/api/specs/customer-api.yaml"
+        entityModel: "customer-api.yaml"
         entityName: "Customer"
     }
 
@@ -25,8 +23,8 @@ process "Process Entity Demo" {
     }
 
     flow {
-        "start-event" -> "load-customer"
-        "load-customer" -> "process-customer"
+        "start-event" -> "load-customer-data"
+        "load-customer-data" -> "process-customer"
         "process-customer" -> "end-event"
     }
 }
