@@ -102,12 +102,10 @@ class ProcessEntity(Element):
     """Process entity element that translates to a serviceTask in Camunda.
     
     This element must always be the first task after a start task and contains:
-    - id: Element identifier
-    - type: Job worker type
+    - id: Element identifier (auto-generated from name in kebab-case)
     - entity_model: Path to OpenAPI file
     - entity_name: Name of the entity
     """
-    task_type: str
     entity_model: str  # Path to OpenAPI file
     entity_name: str   # Name of the entity
 

@@ -167,9 +167,6 @@ class ProcessValidator:
         """Validate process entity element."""
         errors = []
         
-        if not entity.task_type or not entity.task_type.strip():
-            errors.append(f"Process entity {entity.id} must have a non-empty type")
-        
         if not entity.entity_model or not entity.entity_model.strip():
             errors.append(f"Process entity {entity.id} must have a non-empty entityModel path")
         

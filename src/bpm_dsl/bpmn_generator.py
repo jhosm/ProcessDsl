@@ -200,7 +200,7 @@ class BPMNGenerator:
         """Add a process entity as a service task to the process.
         
         ProcessEntity translates to a serviceTask in Camunda with:
-        - The specified job worker type
+        - A default job worker type for entity processing
         - A special header containing the OpenAPI model path
         """
         service_task = SubElement(parent, "serviceTask")
@@ -210,9 +210,9 @@ class BPMNGenerator:
         # Add Zeebe extension elements
         extension_elements = SubElement(service_task, "extensionElements")
         
-        # Add Zeebe task definition
+        # Add Zeebe task definition with default task type
         zeebe_task_def = SubElement(extension_elements, "zeebe:taskDefinition")
-        zeebe_task_def.set("type", process_entity.task_type)
+        zeebe_task_def.set("type", "process-entity-validator")
         # ProcessEntity uses default retries (3)
         zeebe_task_def.set("retries", "3")
         
@@ -228,6 +228,19 @@ class BPMNGenerator:
         entity_name_header = SubElement(zeebe_headers, "zeebe:header")
         entity_name_header.set("key", "entityName")
         entity_name_header.set("value", process_entity.entity_name)
+        
+        # Add I/O mapping for automatic input/output variables
+        io_mapping = SubElement(extension_elements, "zeebe:ioMapping")
+        
+        # Input: processEntity variable (data to validate)
+        input_process_entity = SubElement(io_mapping, "zeebe:input")
+        input_process_entity.set("source", "=processEntity")
+        input_process_entity.set("target", "processEntity")
+        
+        # Output: entityValidationResult (validation results)
+        output_result = SubElement(io_mapping, "zeebe:output")
+        output_result.set("source", "=validationResult")
+        output_result.set("target", "entityValidationResult")
     
     def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
         """Add an exclusive gateway to the process."""

@@ -1,0 +1,39 @@
+{
+  "name": "processdsl-job-workers",
+  "version": "1.0.0",
+  "description": "Job workers for ProcessDSL BPM elements",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "ts-node --watch src/index.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "zeebe",
+    "camunda",
+    "bpmn",
+    "job-workers",
+    "processdsl",
+    "openapi",
+    "validation"
+  ],
+  "author": "ProcessDSL",
+  "license": "MIT",
+  "dependencies": {
+    "zeebe-node": "^8.3.0",
+    "js-yaml": "^4.1.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/js-yaml": "^4.0.5",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

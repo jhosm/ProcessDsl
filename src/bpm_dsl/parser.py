@@ -140,11 +140,11 @@ class BPMTransformer(Transformer):
     @v_args(inline=True)
     def process_entity(self, name: str, properties: dict) -> ProcessEntity:
         """Create a ProcessEntity node."""
-        element_id = properties.get('id', to_kebab_case(name))
+        # Always use kebab-case for the id
+        element_id = to_kebab_case(name)
         return ProcessEntity(
             name=name,
             id=element_id,
-            task_type=properties.get('entity_type', ''),
             entity_model=properties.get('entity_model', ''),
             entity_name=properties.get('entity_name', '')
         )
