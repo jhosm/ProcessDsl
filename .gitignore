@@ -215,3 +215,7 @@ coverage.cobertura.xml
 **/examples/**/src/
 src/ProcessDsl.Orchestration/nupkg/ProcessDsl.Orchestration.1.1.0.nupkg
 src/ProcessDsl.Orchestration/nupkg/ProcessDsl.Orchestration.1.0.0.nupkg
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
