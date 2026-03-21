@@ -389,6 +389,156 @@ processEntity "Load Order" : "Order"
 
 ---
 
+## 10. Flow Inference — Eliminating Structural Boilerplate
+
+Many elements exist purely as routing constructs: they carry no configuration and serve only to connect the graph. The flow section already contains enough information to infer them. This section introduces flow-level sugar that eliminates the need to declare these structural elements.
+
+### Flow Chains
+
+Linear sequences can be written as chains instead of individual edges:
+
+```
+// Verbose — one edge per line
+flow {
+    "a" -> "b"
+    "b" -> "c"
+    "c" -> "d"
+}
+
+// Chain — equivalent
+flow {
+    "a" -> "b" -> "c" -> "d"
+}
+```
+
+Chains can mix with other flow constructs freely.
+
+### Inline End Events
+
+End events rarely carry configuration. Instead of declaring them as separate elements, define them inline in the flow:
+
+```
+// Before — end declared separately
+end "Order Complete"
+
+flow {
+    "notify-customer" -> "order-complete"
+}
+
+// After — inline end, no separate declaration needed
+flow {
+    "notify-customer" -> end "Order Complete"
+}
+```
+
+For unnamed termination (single end event):
+
+```
+flow {
+    "last-task" -> end
+}
+```
+
+Inline end events generate IDs from their name in kebab-case, just like declared elements. They are proper BPMN end events in the generated output.
+
+### Implicit XOR from Conditional Flows
+
+When a non-gateway element has outgoing flows with `when`/`otherwise`, the compiler automatically inserts an XOR gateway after it. No declaration needed.
+
+```
+// Before — explicit XOR gateway
+xor "Transfer Result"
+
+flow {
+    "settlement-delay" -> "transfer-result"
+    "transfer-result" -> "record-success" when "transferStatus == 'completed'"
+    "transfer-result" -> "record-failure" otherwise
+}
+
+// After — implicit XOR, inferred from conditions
+flow {
+    "settlement-delay" -> "record-success" when "transferStatus == 'completed'"
+    "settlement-delay" -> "record-failure" otherwise
+}
+```
+
+The compiler detects that `"settlement-delay"` is a non-gateway element with conditional outgoing flows and inserts an XOR gateway between it and the targets. The auto-generated gateway ID is `<source-id>-gateway` (e.g., `settlement-delay-gateway`).
+
+**Rule:** If the source element is already a declared gateway, no implicit gateway is inserted — the conditions apply directly.
+
+### Parallel Fork/Join with `[...]`
+
+The `[...]` syntax in the flow section creates implicit parallel gateways:
+
+```
+// Before — explicit fork and join gateways
+parallel "Fork"
+parallel "Join"
+
+flow {
+    "load-order" -> "fork"
+    "fork" -> "check-inventory"
+    "fork" -> "validate-payment"
+    "fork" -> "enrich-customer-data"
+    "check-inventory" -> "join"
+    "validate-payment" -> "join"
+    "enrich-customer-data" -> "join"
+    "join" -> "next-step"
+}
+
+// After — fork/join inferred from [...]
+flow {
+    "load-order" -> ["check-inventory", "validate-payment", "enrich-customer-data"] -> "next-step"
+}
+```
+
+- `"source" -> [...]` creates a parallel fork gateway
+- `[...] -> "target"` creates a parallel join gateway
+- Chaining `"source" -> [...] -> "target"` creates both in one line
+
+### Named Joins with `as`
+
+When you need to reference a join point in subsequent flows (e.g., for branching after a join), use `as "name"`:
+
+```
+flow {
+    "load-order" -> ["check-inventory", "validate-payment", "enrich-customer-data"] as "validated"
+    "validated" -> "fulfill-order" when "paymentValid == true"
+    "validated" -> "cancel-order" otherwise
+}
+```
+
+The `as "name"` assigns an ID to the implicit join gateway, making it referenceable. Combined with implicit XOR, this handles the common parallel-fork-join-then-decide pattern without any gateway declarations.
+
+### Combining Everything
+
+These features compose naturally. Here's a complex flow using all the sugar:
+
+```
+flow {
+    "order-received" -> "load-order"
+    "load-order" -> ["check-inventory", "validate-payment", "enrich-data"] as "validated"
+    "validated" -> "fulfill-order" when "paymentValid == true"
+    "validated" -> "cancel-order" otherwise
+    "fulfill-order" -> "notify-customer" -> end "Order Complete"
+    "cancel-order" -> end "Order Cancelled"
+}
+```
+
+This generates 7 BPMN nodes behind the scenes (fork gateway, join gateway, XOR gateway, 2 end events) — none of which needed explicit declaration.
+
+### When to Use Explicit Declarations
+
+The full element declaration form is still available and preferred when:
+- A gateway needs an explicit `id:` override
+- You want to name structural elements for documentation clarity
+- The process is complex and explicit declarations aid readability
+- You need a gateway with properties beyond just a type
+
+The sugar and the explicit forms can coexist in the same process. Use whichever is clearer for each case.
+
+---
+
 ## Grammar Changes Summary
 
 | Current | Proposed | Type |
@@ -406,6 +556,11 @@ processEntity "Load Order" : "Order"
 | — | Empty body without `{}` | New sugar |
 | — | Inline `: "value"` for type/processId/entityName | New sugar |
 | — | Duration shorthands (`30s`, `5m`, `2h`, `1d`) | New sugar |
+| — | Flow chains (`"a" -> "b" -> "c"`) | New sugar |
+| — | Inline end events (`-> end "Name"`) | New sugar |
+| — | Implicit XOR from `when`/`otherwise` on non-gateway | New sugar |
+| — | Parallel `[...]` fork/join in flow | New sugar |
+| — | Named joins (`as "name"`) | New sugar |
 
 ---
 
@@ -422,8 +577,6 @@ process "Order Processing" {
 
     processEntity "Load Order" : "Order"
 
-    parallel "Validate and Enrich"
-
     serviceTask "Check Inventory" : "inventory-check" {
         retries: 3
 
@@ -439,10 +592,6 @@ process "Order Processing" {
 
     serviceTask "Enrich Customer Data" : "customer-enrichment"
 
-    parallel "Join Results"
-
-    xor "Payment OK?"
-
     serviceTask "Fulfill Order" : "order-fulfillment"
 
     serviceTask "Notify Customer" : "send-notification" {
@@ -451,31 +600,16 @@ process "Order Processing" {
 
     serviceTask "Cancel Order" : "order-cancellation"
 
-    end "Order Complete"
-    end "Order Cancelled"
-
     flow {
         "order-received" -> "load-order"
-        "load-order" -> "validate-and-enrich"
 
-        // parallel fork
-        "validate-and-enrich" -> "check-inventory"
-        "validate-and-enrich" -> "validate-payment"
-        "validate-and-enrich" -> "enrich-customer-data"
+        // parallel fork, join, then decision — no gateway declarations needed
+        "load-order" -> ["check-inventory", "validate-payment", "enrich-customer-data"] as "validated"
+        "validated" -> "fulfill-order" when "paymentValid == true"
+        "validated" -> "cancel-order" otherwise
 
-        // parallel join
-        "check-inventory" -> "join-results"
-        "validate-payment" -> "join-results"
-        "enrich-customer-data" -> "join-results"
-
-        // decision
-        "join-results" -> "payment-ok?"
-        "payment-ok?" -> "fulfill-order" when "paymentValid == true"
-        "payment-ok?" -> "cancel-order" otherwise
-
-        "fulfill-order" -> "notify-customer"
-        "notify-customer" -> "order-complete"
-        "cancel-order" -> "order-cancelled"
+        "fulfill-order" -> "notify-customer" -> end "Order Complete"
+        "cancel-order" -> end "Order Cancelled"
 
         // error paths
         "inventory-timeout" -> "cancel-order"
@@ -484,6 +618,8 @@ process "Order Processing" {
     }
 }
 ```
+
+**What was eliminated:** 2 parallel gateway declarations, 1 XOR gateway declaration, 2 end event declarations. The flow section now fully expresses the routing structure.
 
 ---
 
@@ -518,17 +654,9 @@ process "Invoice Batch Processing" {
             outputMappings: ["erpReference" -> "reference"]
         }
 
-        end "Invoice Done"
-        end "Invoice Failed"
-
         flow {
-            "begin-invoice" -> "validate-invoice"
-            "validate-invoice" -> "calculate-tax"
-            "calculate-tax" -> "submit-to-erp"
-            "submit-to-erp" -> "invoice-done"
-
-            // error path
-            "validation-failed" -> "invoice-failed"
+            "begin-invoice" -> "validate-invoice" -> "calculate-tax" -> "submit-to-erp" -> end "Invoice Done"
+            "validation-failed" -> end "Invoice Failed"
         }
     }
 
@@ -538,17 +666,14 @@ process "Invoice Batch Processing" {
         headers: ["template" -> "batch-summary"]
     }
 
-    end "Batch Complete"
-
     flow {
-        "batch-triggered" -> "load-invoices"
-        "load-invoices" -> "process-single-invoice"
-        "process-single-invoice" -> "generate-report"
-        "generate-report" -> "send-summary-email"
-        "send-summary-email" -> "batch-complete"
+        "batch-triggered" -> "load-invoices" -> "process-single-invoice"
+        "process-single-invoice" -> "generate-report" -> "send-summary-email" -> end "Batch Complete"
     }
 }
 ```
+
+**What was eliminated:** 3 end event declarations. Flow chains replaced 10 individual edges with 4 chain expressions.
 
 ---
 
@@ -575,8 +700,6 @@ process "Payment Reconciliation" {
 
     timer "Settlement Delay" { duration: 2h }
 
-    xor "Transfer Result"
-
     serviceTask "Record Success" : "record-transaction" {
         headers: ["status" -> "completed"]
     }
@@ -594,22 +717,18 @@ process "Payment Reconciliation" {
         }
     }
 
-    end "Reconciled"
-    end "Failed"
-
     flow {
-        "reconciliation-request" -> "load-transaction"
-        "load-transaction" -> "initiate-bank-transfer"
-        "initiate-bank-transfer" -> "wait-for-bank-callback"
-        "wait-for-bank-callback" -> "settlement-delay"
-        "settlement-delay" -> "transfer-result"
+        "reconciliation-request" -> "load-transaction" -> "initiate-bank-transfer"
+        "initiate-bank-transfer" -> "wait-for-bank-callback" -> "settlement-delay"
 
-        "transfer-result" -> "record-success" when "transferStatus == 'completed'"
-        "transfer-result" -> "record-failure" otherwise
+        // implicit XOR — conditions on a non-gateway element
+        "settlement-delay" -> "record-success" when "transferStatus == 'completed'"
+        "settlement-delay" -> "record-failure" otherwise
 
-        "record-success" -> "reconciled"
-        "record-failure" -> "notify-operations"
-        "notify-operations" -> "failed"
+        "record-success" -> end "Reconciled"
+        "record-failure" -> "notify-operations" -> end "Failed"
     }
 }
 ```
+
+**What was eliminated:** 1 XOR gateway declaration, 2 end event declarations. Flow chains collapsed 6 linear edges into 2 chain expressions.
