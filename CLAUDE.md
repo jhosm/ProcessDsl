@@ -12,6 +12,215 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Project Overview
+
+**ProcessDsl** is a multi-language Business Process Management (BPM) platform that lets developers define workflows in a text-based DSL (`.bpm` files) paired with OpenAPI specs (`.yaml`), then automatically generates:
+
+- **BPMN XML** deployable to Camunda Zeebe
+- **C# microservices** from OpenAPI specifications
+- **TypeScript job workers** for entity validation
+- **Automatic diagram layouts** with professional positioning
+
+### Architecture
+
+```
+.bpm file + .yaml spec
+        │
+        ▼
+  Lark Parser (Python)
+        │
+        ▼
+    AST Nodes
+        │
+    ┌───┴───┐
+    ▼       ▼
+Validator  BPMN Generator → Layout Engine → .bpmn XML
+                                              │
+                                              ▼
+                                        Camunda Zeebe
+                                              │
+                              ┌───────────────┼──────────────┐
+                              ▼               ▼              ▼
+                     C# Orchestration   TypeScript       Generated
+                       Library          Job Workers     Microservices
+```
+
+## Repository Structure
+
+```
+ProcessDsl/
+├── src/
+│   ├── bpm_dsl/                      # Core Python DSL engine
+│   │   ├── grammar.lark              #   EBNF grammar definition
+│   │   ├── parser.py                 #   Lark parser + AST transformer
+│   │   ├── ast_nodes.py              #   Dataclass AST node definitions
+│   │   ├── bpmn_generator.py         #   BPMN XML generation (Zeebe namespaces)
+│   │   ├── layout_engine.py          #   Graph-based automatic layout
+│   │   ├── validator.py              #   Multi-level process validation
+│   │   └── cli.py                    #   Click CLI (convert, validate, info)
+│   │
+│   ├── ProcessDsl.Orchestration/     # C# NuGet library (v1.1.0, .NET 8.0)
+│   │   ├── CamundaClient.cs          #   Zeebe gRPC client wrapper
+│   │   ├── ProcessOrchestrator.cs    #   High-level orchestration service
+│   │   ├── ICamundaClient.cs         #   Client interface
+│   │   ├── IProcessOrchestrator.cs   #   Orchestrator interface
+│   │   ├── ServiceCollectionExtensions.cs  # DI registration
+│   │   └── Models/                   #   Configuration, request, response types
+│   │
+│   ├── jobWorkers/                   # TypeScript Zeebe job workers
+│   │   └── src/
+│   │       ├── index.ts              #   Worker lifecycle management
+│   │       ├── processEntityValidator.ts  # AJV-based entity validation
+│   │       └── openAPI_contracts/    #   OpenAPI schema files
+│   │
+│   └── microservices/                # Auto-generated C# APIs (gitignored)
+│
+├── tests/
+│   ├── test_parser.py                # Python parser tests
+│   ├── test_bpmn_generator.py        # BPMN generation tests
+│   └── ProcessDsl.Orchestration.Tests/  # C# xUnit tests (27 tests)
+│
+├── examples/                         # Sample .bpm processes and .yaml specs
+├── templates/                        # OpenAPI Generator custom templates
+│   ├── aspnetcore-default/
+│   └── aspnetcore-processdsl/
+│
+├── scripts/                          # Deployment and generation scripts
+│   ├── generate_microservice.sh
+│   ├── deploy_to_camunda.sh
+│   ├── test_microservice.sh
+│   └── extract_process_metadata.py
+│
+└── docs/
+    ├── DSL_GRAMMAR.md                # Grammar specification
+    ├── LAYOUT_ALGORITHM.md           # Layout engine details
+    ├── PROCESS_ENTITY_VALIDATION.md  # Validation pattern
+    ├── OPENAPI_VALIDATION.md         # OpenAPI pairing rules
+    ├── MICROSERVICES_WORKFLOW.md      # Microservice generation
+    └── END_TO_END_TESTING.md         # E2E testing guide
+```
+
+## Languages & Frameworks
+
+| Component | Language | Key Dependencies |
+|-----------|----------|-----------------|
+| DSL Engine | Python 3.8+ | lark 1.1.7, lxml 4.9.3, PyYAML 6.0.1, click 8.1.7 |
+| Orchestration Library | C# / .NET 8.0 | zb-client 2.9.0, Newtonsoft.Json 13.0.3, Microsoft.Extensions.* |
+| Job Workers | TypeScript 5.0 | zeebe-node 8.3.0, ajv 8.12.0, js-yaml 4.1.0 |
+
+## Build & Test Commands
+
+### Python (DSL Engine)
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+pip install -e .                        # Dev mode install
+
+# Run tests
+python -m pytest tests/ -v
+python -m pytest tests/ --cov=src/bpm_dsl --cov-report=html
+
+# Linting & formatting
+black src/ tests/
+flake8 src/ tests/
+mypy src/
+
+# CLI usage
+python -m bpm_dsl.cli convert examples/process_entity_demo.bpm --output result.bpmn
+python -m bpm_dsl.cli validate examples/process_entity_demo.bpm
+python -m bpm_dsl.cli info examples/process_entity_demo.bpm
+```
+
+### C# (Orchestration)
+
+```bash
+# Build
+dotnet build src/ProcessDsl.Orchestration/
+
+# Test (27 unit tests)
+dotnet test tests/ProcessDsl.Orchestration.Tests/
+dotnet test tests/ProcessDsl.Orchestration.Tests/ /p:CollectCoverage=true
+```
+
+### TypeScript (Job Workers)
+
+```bash
+cd src/jobWorkers
+npm install
+npm run build
+npm run dev       # Development mode
+npm start         # Production
+```
+
+### Microservice Generation
+
+```bash
+# Generate a C# microservice from OpenAPI spec
+./scripts/generate_microservice.sh examples/process_entity_demo.yaml ProcessEntityDemo
+```
+
+## DSL Syntax Quick Reference
+
+```
+process "My Process" {
+    id: "my-process"
+    version: "1.0"
+
+    start "Begin" {}
+
+    processEntity "Load Data" {         # Auto-generates validation flow
+        entityName: "Customer"
+    }
+
+    scriptCall "Calculate" {
+        script: "result = compute(input)"
+        inputVars: ["input"]
+        outputVars: ["result"]
+    }
+
+    serviceTask "Call API" {
+        taskType: "api-call"
+        retries: 3
+        headers: { "url": "https://api.example.com" }
+    }
+
+    xorGateway "Check Result" {}
+
+    end "Done" {}
+
+    flow {
+        "begin" -> "load-data"
+        "load-data" -> "calculate"
+        "calculate" -> "call-api"
+        "call-api" -> "check-result"
+        "check-result" -> "done" when "result > 0"
+        "check-result" -> "begin" default
+    }
+}
+```
+
+Key rules:
+- Every `.bpm` file must have a matching `.yaml` (OpenAPI) file with the same basename
+- Element IDs are auto-generated from names in kebab-case
+- `processEntity` elements automatically generate validation service tasks and error-handling XOR gateways in BPMN output
+
+## Key Design Patterns
+
+- **Pipeline**: DSL text → Lark parse → AST transform → validate → generate BPMN → layout
+- **Visitor/Transformer**: Lark transformer walks parse tree into AST dataclasses
+- **Builder**: BPMNGenerator constructs XML element by element
+- **DI**: C# orchestration uses Microsoft.Extensions.DependencyInjection
+- **Job Worker**: TypeScript workers subscribe to Zeebe task types
+
+## Conventions
+
+- **Python**: formatted with `black`, linted with `flake8`, type-checked with `mypy`
+- **C#**: nullable enabled, implicit usings, .NET 8.0
+- **IDs**: kebab-case auto-generated from display names (e.g., "Load Customer" → `load-customer`)
+- **Tests**: pytest for Python, xUnit for C#
+- **Commit messages**: prefixed with `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
+
 ## Non-Interactive Shell Commands
 
 **ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
