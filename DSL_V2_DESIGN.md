@@ -1,94 +1,94 @@
-# DSL v2 — Proposta de Design para P0 Gaps
+# DSL v2 — Design Proposal for P0 Gaps
 
-## Contexto
+## Context
 
-A DSL atual suporta 6 tipos de elementos: `start`, `end`, `scriptCall`, `serviceTask`, `processEntity` e `xorGateway`. Este documento propõe a sintaxe para os 7 gaps P0 identificados no roadmap, com foco em legibilidade e consistência.
+The current DSL supports 6 element types: `start`, `end`, `scriptCall`, `serviceTask`, `processEntity`, and `xorGateway`. This document proposes syntax for the 7 P0 gaps identified in the roadmap, focusing on readability and consistency.
 
-**Nota:** A DSL ainda não é usada em produção. Pode ser alterada sem preocupações de backwards compatibility.
+**Note:** The DSL is not yet in production. It can be changed without backwards compatibility concerns.
 
-### Princípios de Design
+### Design Principles
 
-1. **Blocos `keyword "Nome" { props }`** — consistente em todos os elementos
-2. **Propriedades `key: value`** — declarativas
-3. **Flow section separada** — o grafo é explícito, separado dos elementos
-4. **IDs auto-gerados** do nome em kebab-case (override com `id:` explícito)
-5. **Defaults sensatos** — só declarar o que diverge do default
+1. **`keyword "Name" { props }` blocks** — consistent across all elements
+2. **`key: value` properties** — declarative
+3. **Separate flow section** — the graph is explicit, separated from element definitions
+4. **Auto-generated IDs** from name in kebab-case (override with explicit `id:`)
+5. **Sensible defaults** — only declare what differs from the default
 
 ---
 
-## 1. Gateway Genérico
+## 1. Generic Gateway
 
-**Substitui `xorGateway`** por um `gateway` genérico com `type`. Escala para inclusive (P1) sem nova keyword.
+**Replaces `xorGateway`** with a generic `gateway` with `type`. Scales to inclusive (P1) without a new keyword.
 
 ```
-gateway "Decisão" {
+gateway "Decision" {
     type: "xor"
 }
 
-gateway "Fork Paralelo" {
+gateway "Parallel Fork" {
     type: "parallel"
 }
 ```
 
-Tipos suportados: `"xor"` (exclusivo), `"parallel"`, `"inclusive"` (futuro P1).
+Supported types: `"xor"` (exclusive), `"parallel"`, `"inclusive"` (future P1).
 
-**Nota:** `xorGateway` deixa de existir. Migra-se para `gateway` com `type: "xor"`.
+**Note:** `xorGateway` ceases to exist. Migrate to `gateway` with `type: "xor"`.
 
 ---
 
 ## 2. Timer Events
 
-Três variantes: timer start, intermediate catch e boundary.
+Three variants: timer start, intermediate catch, and boundary.
 
-### Timer Start (processo arranca por timer)
+### Timer Start (process triggered by timer)
 
 ```
-start "A Cada Hora" {
+start "Every Hour" {
     timer: cycle("R/PT1H")
 }
 ```
 
-### Intermediate Catch (espera no fluxo)
+### Intermediate Catch (wait in the flow)
 
 ```
-timer "Esperar 30 Minutos" {
+timer "Wait 30 Minutes" {
     duration: "PT30M"
 }
 ```
 
-Suporta `duration` (esperar X tempo), `date` (esperar até data) e `cycle` (repetição).
+Supports `duration` (wait X time), `date` (wait until date), and `cycle` (repetition).
 
-### Syntactic Sugar para Durações
+### Duration Syntactic Sugar
 
-ISO 8601 (`"PT30M"`) é o formato canónico, mas a DSL aceita shorthands legíveis como alternativa:
+ISO 8601 (`"PT30M"`) is the canonical format, but the DSL accepts readable shorthands as an alternative:
 
 ```
-timer "Esperar" { duration: 30m }         // equivale a "PT30M"
-timer "Delay Longo" { duration: 2h30m }   // equivale a "PT2H30M"
-timer "Retry" { duration: 5s }            // equivale a "PT5S"
-timer "Esperar Dia" { duration: 1d }      // equivale a "P1D"
+timer "Wait" { duration: 30m }           // equivalent to "PT30M"
+timer "Long Delay" { duration: 2h30m }   // equivalent to "PT2H30M"
+timer "Retry" { duration: 5s }           // equivalent to "PT5S"
+timer "Wait a Day" { duration: 1d }      // equivalent to "P1D"
 ```
 
-O mesmo sugar aplica-se em boundary events:
+The same sugar applies to boundary events:
 
 ```
 onTimer "Timeout" { duration: 30s }
-onTimer "Lembrete" { duration: 1h, interrupting: false }
+onTimer "Reminder" { duration: 1h, interrupting: false }
 ```
 
-E em timer starts com cycle:
+And to timer starts with cycle:
 
 ```
-start "Diario" { timer: cycle(1d) }       // equivale a cycle("R/P1D")
-start "A Cada Hora" { timer: cycle(1h) }  // equivale a cycle("R/PT1H")
+start "Daily" { timer: cycle(1d) }       // equivalent to cycle("R/P1D")
+start "Every Hour" { timer: cycle(1h) }  // equivalent to cycle("R/PT1H")
 ```
 
-Formato ISO 8601 raw continua a ser suportado para expressões que o sugar não cobre (e.g., `"R3/PT1H"` para repetir 3 vezes).
+Raw ISO 8601 format is still supported for expressions the sugar cannot cover (e.g., `"R3/PT1H"` for repeat 3 times).
 
-### Boundary Timer (em cima de um task)
+### Boundary Timer (attached to a task)
 
 ```
-serviceTask "Chamar API Lenta" {
+serviceTask "Call Slow API" {
     type: "slow-api"
 
     onTimer "Timeout" {
@@ -97,15 +97,15 @@ serviceTask "Chamar API Lenta" {
 }
 ```
 
-O boundary event fica **aninhado no task a que pertence** — legível porque vês logo a associação, em vez de declarar separadamente e ligar por ID.
+The boundary event is **nested inside the task it belongs to** — readable because you see the association immediately, instead of declaring separately and linking by ID.
 
-`interrupting` é `true` por omissão (default BPMN). Só se declara quando se quer o contrário:
+`interrupting` is `true` by default (BPMN default). Only declare it when you want the opposite:
 
 ```
-serviceTask "Processo Longo" {
+serviceTask "Long Process" {
     type: "long-process"
 
-    onTimer "Lembrete" {
+    onTimer "Reminder" {
         duration: "PT1M"
         interrupting: false
     }
@@ -116,25 +116,25 @@ serviceTask "Processo Longo" {
 
 ## 3. Error Boundary Events
 
-Mesmo padrão de nesting que timer boundary:
+Same nesting pattern as timer boundary:
 
 ```
-serviceTask "Chamar API" {
+serviceTask "Call API" {
     type: "api-call"
     retries: 3
 
-    onError "Falha API" {
+    onError "API Failure" {
         errorCode: "API_ERROR"
     }
 }
 ```
 
-`interrupting` é `true` por omissão. O boundary event gera um ID a partir do nome (`"falha-api"`) e é referenciável no flow section:
+`interrupting` is `true` by default. The boundary event generates an ID from the name (`"api-failure"`) and is referenceable in the flow section:
 
 ```
 flow {
-    "chamar-api" -> "proximo-passo"
-    "falha-api" -> "handler-erro"
+    "call-api" -> "next-step"
+    "api-failure" -> "error-handler"
 }
 ```
 
@@ -142,25 +142,25 @@ flow {
 
 ## 4. Subprocess (Embedded)
 
-Contém os seus próprios elementos e flow section, recursivamente. Boundary events ficam aninhados:
+Contains its own elements and flow section, recursively. Boundary events are nested:
 
 ```
-subprocess "Processar Encomenda" {
+subprocess "Process Order" {
 
-    start "Inicio Sub" {}
+    start "Sub Start" {}
 
-    serviceTask "Validar Stock" {
+    serviceTask "Check Stock" {
         type: "check-stock"
     }
 
-    end "Fim Sub" {}
+    end "Sub End" {}
 
     flow {
-        "inicio-sub" -> "validar-stock"
-        "validar-stock" -> "fim-sub"
+        "sub-start" -> "check-stock"
+        "check-stock" -> "sub-end"
     }
 
-    onError "Erro Encomenda" {
+    onError "Order Error" {
         errorCode: "ORDER_ERROR"
     }
 }
@@ -170,19 +170,19 @@ subprocess "Processar Encomenda" {
 
 ## 5. Call Activity
 
-Invoca outro processo por ID. Suporta propagação total ou mapeamento explícito de variáveis:
+Invokes another process by ID. Supports full propagation or explicit variable mapping:
 
 ```
-callActivity "Validar Pagamento" {
+callActivity "Validate Payment" {
     processId: "payment-validation"
     propagateAllVariables: true
 }
 ```
 
-Com mapeamento explícito:
+With explicit mapping:
 
 ```
-callActivity "Validar Pagamento" {
+callActivity "Validate Payment" {
     processId: "payment-validation"
     inputMappings: ["orderId" -> "orderId", "amount" -> "paymentAmount"]
     outputMappings: ["paymentResult" -> "paymentStatus"]
@@ -193,10 +193,10 @@ callActivity "Validar Pagamento" {
 
 ## 6. Multi-Instance
 
-Modificador aplicável a qualquer task ou subprocess. Lê-se quase como linguagem natural:
+Modifier applicable to any task or subprocess. Reads almost like natural language:
 
 ```
-serviceTask "Enviar Notificacao" {
+serviceTask "Send Notification" {
     type: "send-notification"
 
     forEach: "stakeholders"
@@ -205,23 +205,23 @@ serviceTask "Enviar Notificacao" {
 }
 ```
 
-> "para cada stakeholder em stakeholders, em paralelo"
+> "for each stakeholder in stakeholders, in parallel"
 
-Em subprocess:
+In subprocess:
 
 ```
-subprocess "Processar Item" {
+subprocess "Process Item" {
     forEach: "lineItems"
     as: "item"
     parallel: false
 
-    start "Inicio" {}
-    serviceTask "Processar" { type: "process-item" }
-    end "Fim" {}
+    start "Begin" {}
+    serviceTask "Process" { type: "process-item" }
+    end "Done" {}
 
     flow {
-        "inicio" -> "processar"
-        "processar" -> "fim"
+        "begin" -> "process"
+        "process" -> "done"
     }
 }
 ```
@@ -230,30 +230,30 @@ subprocess "Processar Item" {
 
 ## 7. Message Events
 
-### Message Start (processo arranca por mensagem)
+### Message Start (process triggered by message)
 
 ```
-start "Pedido Recebido" {
+start "Order Received" {
     message: "new-order"
 }
 ```
 
-### Intermediate Catch (esperar por mensagem)
+### Intermediate Catch (wait for message)
 
 ```
-receiveMessage "Aguardar Confirmacao" {
+receiveMessage "Wait for Confirmation" {
     message: "payment-confirmed"
     correlationKey: "orderId"
 }
 ```
 
-### Boundary Message (em cima de task)
+### Boundary Message (attached to task)
 
 ```
-serviceTask "Processo Longo" {
+serviceTask "Long Process" {
     type: "long-process"
 
-    onMessage "Cancelamento" {
+    onMessage "Cancellation" {
         message: "cancel-request"
         correlationKey: "orderId"
         interrupting: true
@@ -263,9 +263,9 @@ serviceTask "Processo Longo" {
 
 ---
 
-## 8. Flow — `otherwise` em vez de `default`
+## 8. Flow — `otherwise` instead of `default`
 
-Melhoria de legibilidade no flow section:
+Readability improvement in the flow section:
 
 ```
 flow {
@@ -274,27 +274,142 @@ flow {
 }
 ```
 
-`otherwise` substitui `default` — lê-se melhor e evita confusão com keyword reservada de outras linguagens.
+`otherwise` replaces `default` — reads better and avoids confusion with reserved keywords in other languages.
 
 ---
 
-## Resumo de Alterações à Gramática
+## 9. Shorthand Syntax
 
-| Atual | Proposto | Tipo |
+Many elements follow a pattern where the keyword and name are the only meaningful parts, or the body just sets a single `type`. The DSL provides shorthands for these common cases. The full `keyword "Name" { props }` form always works — shorthands are optional convenience.
+
+### Empty Body — Drop the Braces
+
+When an element has no properties, the `{}` can be omitted:
+
+```
+// Full form
+start "Begin" {}
+end "Done" {}
+
+// Shorthand — equivalent
+start "Begin"
+end "Done"
+```
+
+### Gateway Type as Keyword
+
+Since every gateway must have a type, and it's almost always the only property, the type can be used directly as the keyword:
+
+```
+// Full form
+gateway "Decision" {
+    type: "xor"
+}
+
+gateway "Fork" {
+    type: "parallel"
+}
+
+// Shorthand — equivalent
+xor "Decision"
+parallel "Fork"
+```
+
+When you need extra properties (e.g., an explicit `id:`), use the block form:
+
+```
+xor "Decision" {
+    id: "my-custom-id"
+}
+```
+
+### Service Task with Inline Type
+
+A service task that only defines a `type` can use a colon shorthand:
+
+```
+// Full form
+serviceTask "Check Stock" {
+    type: "check-stock"
+}
+
+// Shorthand — equivalent
+serviceTask "Check Stock" : "check-stock"
+```
+
+When you need additional properties (retries, headers, boundary events), use the full block:
+
+```
+serviceTask "Call API" : "api-call" {
+    retries: 3
+    headers: ["url" -> "https://api.example.com"]
+}
+```
+
+### Call Activity with Inline Process ID
+
+Same pattern — a call activity that only sets `processId`:
+
+```
+// Full form
+callActivity "Validate Payment" {
+    processId: "payment-validation"
+    propagateAllVariables: true
+}
+
+// Shorthand — equivalent
+callActivity "Validate Payment" : "payment-validation"
+```
+
+By default, the shorthand form uses `propagateAllVariables: true`. Use the full block form when you need explicit mappings.
+
+### Process Entity with Inline Entity Name
+
+```
+// Full form
+processEntity "Load Order" {
+    entityName: "Order"
+}
+
+// Shorthand — equivalent
+processEntity "Load Order" : "Order"
+```
+
+### Summary
+
+| Full Form | Shorthand | When |
 |---|---|---|
-| `xorGateway` | `gateway` com `type` | **Breaking change** |
-| — | `timer` (intermediate catch) | Novo elemento |
-| — | `start` com `timer:` / `message:` | Extensão |
-| — | `onTimer` / `onError` / `onMessage` (nested) | Novo padrão |
-| — | `subprocess` | Novo elemento |
-| — | `callActivity` | Novo elemento |
-| — | `forEach` / `as` / `parallel` (modificadores) | Novo padrão |
-| — | `receiveMessage` | Novo elemento |
-| `[default]` no flow | `otherwise` | **Breaking change** |
+| `start "X" {}` | `start "X"` | No properties |
+| `end "X" {}` | `end "X"` | No properties |
+| `gateway "X" { type: "xor" }` | `xor "X"` | Gateway with only a type |
+| `gateway "X" { type: "parallel" }` | `parallel "X"` | Gateway with only a type |
+| `serviceTask "X" { type: "t" }` | `serviceTask "X" : "t"` | Task with only a type |
+| `callActivity "X" { processId: "p", propagateAllVariables: true }` | `callActivity "X" : "p"` | Propagate-all call |
+| `processEntity "X" { entityName: "E" }` | `processEntity "X" : "E"` | Entity with only a name |
 
 ---
 
-## Exemplo Completo 1 — Order Processing com Parallelism e Error Handling
+## Grammar Changes Summary
+
+| Current | Proposed | Type |
+|---|---|---|
+| `xorGateway` | `gateway` with `type` | **Breaking change** |
+| — | `xor` / `parallel` shorthand keywords | New sugar |
+| — | `timer` (intermediate catch) | New element |
+| — | `start` with `timer:` / `message:` | Extension |
+| — | `onTimer` / `onError` / `onMessage` (nested) | New pattern |
+| — | `subprocess` | New element |
+| — | `callActivity` | New element |
+| — | `forEach` / `as` / `parallel` (modifiers) | New pattern |
+| — | `receiveMessage` | New element |
+| `[default]` in flow | `otherwise` | **Breaking change** |
+| — | Empty body without `{}` | New sugar |
+| — | Inline `: "value"` for type/processId/entityName | New sugar |
+| — | Duration shorthands (`30s`, `5m`, `2h`, `1d`) | New sugar |
+
+---
+
+## Full Example 1 — Order Processing with Parallelism and Error Handling
 
 ```
 process "Order Processing" {
@@ -305,63 +420,39 @@ process "Order Processing" {
         message: "new-order"
     }
 
-    processEntity "Load Order" {
-        entityName: "Order"
-    }
+    processEntity "Load Order" : "Order"
 
-    gateway "Validate and Enrich" {
-        type: "parallel"
-    }
+    parallel "Validate and Enrich"
 
-    serviceTask "Check Inventory" {
-        type: "inventory-check"
+    serviceTask "Check Inventory" : "inventory-check" {
         retries: 3
 
-        onTimer "Inventory Timeout" {
-            duration: "PT30S"
-        }
-
-        onError "Inventory Error" {
-            errorCode: "INVENTORY_UNAVAILABLE"
-        }
+        onTimer "Inventory Timeout" { duration: 30s }
+        onError "Inventory Error" { errorCode: "INVENTORY_UNAVAILABLE" }
     }
 
-    serviceTask "Validate Payment" {
-        type: "payment-validation"
+    serviceTask "Validate Payment" : "payment-validation" {
         retries: 3
 
-        onError "Payment Failed" {
-            errorCode: "PAYMENT_DECLINED"
-        }
+        onError "Payment Failed" { errorCode: "PAYMENT_DECLINED" }
     }
 
-    serviceTask "Enrich Customer Data" {
-        type: "customer-enrichment"
-    }
+    serviceTask "Enrich Customer Data" : "customer-enrichment"
 
-    gateway "Join Results" {
-        type: "parallel"
-    }
+    parallel "Join Results"
 
-    gateway "Payment OK?" {
-        type: "xor"
-    }
+    xor "Payment OK?"
 
-    serviceTask "Fulfill Order" {
-        type: "order-fulfillment"
-    }
+    serviceTask "Fulfill Order" : "order-fulfillment"
 
-    serviceTask "Notify Customer" {
-        type: "send-notification"
+    serviceTask "Notify Customer" : "send-notification" {
         headers: ["template" -> "order-confirmed"]
     }
 
-    serviceTask "Cancel Order" {
-        type: "order-cancellation"
-    }
+    serviceTask "Cancel Order" : "order-cancellation"
 
-    end "Order Complete" {}
-    end "Order Cancelled" {}
+    end "Order Complete"
+    end "Order Cancelled"
 
     flow {
         "order-received" -> "load-order"
@@ -396,7 +487,7 @@ process "Order Processing" {
 
 ---
 
-## Exemplo Completo 2 — Batch Processing com Multi-Instance e Subprocess
+## Full Example 2 — Batch Processing with Multi-Instance and Subprocess
 
 ```
 process "Invoice Batch Processing" {
@@ -404,40 +495,31 @@ process "Invoice Batch Processing" {
     version: "1.0"
 
     start "Batch Triggered" {
-        timer: cycle("R/P1D")
+        timer: cycle(1d)
     }
 
-    processEntity "Load Invoices" {
-        entityName: "InvoiceBatch"
-    }
+    processEntity "Load Invoices" : "InvoiceBatch"
 
     subprocess "Process Single Invoice" {
         forEach: "invoices"
         as: "invoice"
         parallel: true
 
-        start "Begin Invoice" {}
+        start "Begin Invoice"
 
-        serviceTask "Validate Invoice" {
-            type: "invoice-validation"
-
-            onError "Validation Failed" {
-                errorCode: "INVALID_INVOICE"
-            }
+        serviceTask "Validate Invoice" : "invoice-validation" {
+            onError "Validation Failed" { errorCode: "INVALID_INVOICE" }
         }
 
-        serviceTask "Calculate Tax" {
-            type: "tax-calculation"
-        }
+        serviceTask "Calculate Tax" : "tax-calculation"
 
-        callActivity "Submit to ERP" {
-            processId: "erp-submission"
+        callActivity "Submit to ERP" : "erp-submission" {
             inputMappings: ["invoice" -> "document", "taxAmount" -> "tax"]
             outputMappings: ["erpReference" -> "reference"]
         }
 
-        end "Invoice Done" {}
-        end "Invoice Failed" {}
+        end "Invoice Done"
+        end "Invoice Failed"
 
         flow {
             "begin-invoice" -> "validate-invoice"
@@ -450,16 +532,13 @@ process "Invoice Batch Processing" {
         }
     }
 
-    serviceTask "Generate Report" {
-        type: "batch-report"
-    }
+    serviceTask "Generate Report" : "batch-report"
 
-    serviceTask "Send Summary Email" {
-        type: "send-email"
+    serviceTask "Send Summary Email" : "send-email" {
         headers: ["template" -> "batch-summary"]
     }
 
-    end "Batch Complete" {}
+    end "Batch Complete"
 
     flow {
         "batch-triggered" -> "load-invoices"
@@ -473,21 +552,18 @@ process "Invoice Batch Processing" {
 
 ---
 
-## Exemplo Completo 3 — Async Webhook com Message Events e Timers
+## Full Example 3 — Async Webhook with Message Events and Timers
 
 ```
 process "Payment Reconciliation" {
     id: "payment-reconciliation"
     version: "1.0"
 
-    start "Reconciliation Request" {}
+    start "Reconciliation Request"
 
-    processEntity "Load Transaction" {
-        entityName: "Transaction"
-    }
+    processEntity "Load Transaction" : "Transaction"
 
-    serviceTask "Initiate Bank Transfer" {
-        type: "bank-transfer"
+    serviceTask "Initiate Bank Transfer" : "bank-transfer" {
         retries: 3
         inputMappings: ["transactionId" -> "txId", "amount" -> "transferAmount"]
     }
@@ -497,36 +573,29 @@ process "Payment Reconciliation" {
         correlationKey: "transactionId"
     }
 
-    timer "Settlement Delay" {
-        duration: "PT2H"
-    }
+    timer "Settlement Delay" { duration: 2h }
 
-    gateway "Transfer Result" {
-        type: "xor"
-    }
+    xor "Transfer Result"
 
-    serviceTask "Record Success" {
-        type: "record-transaction"
+    serviceTask "Record Success" : "record-transaction" {
         headers: ["status" -> "completed"]
     }
 
-    serviceTask "Record Failure" {
-        type: "record-transaction"
+    serviceTask "Record Failure" : "record-transaction" {
         headers: ["status" -> "failed"]
     }
 
-    serviceTask "Notify Operations" {
-        type: "send-notification"
+    serviceTask "Notify Operations" : "send-notification" {
         headers: ["channel" -> "ops-alerts"]
 
         onTimer "Notification Timeout" {
-            duration: "PT1M"
+            duration: 1m
             interrupting: false
         }
     }
 
-    end "Reconciled" {}
-    end "Failed" {}
+    end "Reconciled"
+    end "Failed"
 
     flow {
         "reconciliation-request" -> "load-transaction"
