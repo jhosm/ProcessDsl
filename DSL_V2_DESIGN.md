@@ -58,6 +58,33 @@ timer "Esperar 30 Minutos" {
 
 Suporta `duration` (esperar X tempo), `date` (esperar até data) e `cycle` (repetição).
 
+### Syntactic Sugar para Durações
+
+ISO 8601 (`"PT30M"`) é o formato canónico, mas a DSL aceita shorthands legíveis como alternativa:
+
+```
+timer "Esperar" { duration: 30m }         // equivale a "PT30M"
+timer "Delay Longo" { duration: 2h30m }   // equivale a "PT2H30M"
+timer "Retry" { duration: 5s }            // equivale a "PT5S"
+timer "Esperar Dia" { duration: 1d }      // equivale a "P1D"
+```
+
+O mesmo sugar aplica-se em boundary events:
+
+```
+onTimer "Timeout" { duration: 30s }
+onTimer "Lembrete" { duration: 1h, interrupting: false }
+```
+
+E em timer starts com cycle:
+
+```
+start "Diario" { timer: cycle(1d) }       // equivale a cycle("R/P1D")
+start "A Cada Hora" { timer: cycle(1h) }  // equivale a cycle("R/PT1H")
+```
+
+Formato ISO 8601 raw continua a ser suportado para expressões que o sugar não cobre (e.g., `"R3/PT1H"` para repetir 3 vezes).
+
 ### Boundary Timer (em cima de um task)
 
 ```
