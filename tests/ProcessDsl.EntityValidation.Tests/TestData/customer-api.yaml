@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: Customer API
+  version: 1.0.0
+
+components:
+  schemas:
+    Customer:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          pattern: "^\\+?[1-9]\\d{1,14}$"
+        dateOfBirth:
+          type: string
+          format: date
+        address:
+          $ref: '#/components/schemas/Address'
+        status:
+          type: string
+          enum: ["active", "inactive", "suspended"]
+
+    Address:
+      type: object
+      required:
+        - street
+        - city
+        - country
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+          pattern: "^[A-Z]{2}$"
