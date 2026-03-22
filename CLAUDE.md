@@ -67,11 +67,10 @@ ProcessDsl/
 │   │   ├── ServiceCollectionExtensions.cs  # DI registration
 │   │   └── Models/                   #   Configuration, request, response types
 │   │
-│   ├── jobWorkers/                   # TypeScript Zeebe job workers
-│   │   └── src/
-│   │       ├── index.ts              #   Worker lifecycle management
-│   │       ├── processEntityValidator.ts  # AJV-based entity validation
-│   │       └── openAPI_contracts/    #   OpenAPI schema files
+│   ├── ProcessDsl.EntityValidation/  # C# Zeebe job worker (entity validation)
+│   │   ├── EntitySchemaValidator.cs  #   NJsonSchema-based entity validation
+│   │   ├── ProcessEntityValidatorWorker.cs  # Zeebe worker hosted service
+│   │   └── Models/                   #   Configuration, validation result types
 │   │
 │   └── microservices/                # Auto-generated C# APIs (gitignored)
 │
@@ -152,14 +151,12 @@ dotnet test tests/ProcessDsl.Orchestration.Tests/
 dotnet test tests/ProcessDsl.Orchestration.Tests/ /p:CollectCoverage=true
 ```
 
-### TypeScript (Job Workers)
+### Entity Validation Worker (C#)
 
 ```bash
-cd src/jobWorkers
-npm install
-npm run build
-npm run dev       # Development mode
-npm start         # Production
+cd src/ProcessDsl.EntityValidation
+dotnet run                    # Run locally
+dotnet publish -c Release     # Build for deployment
 ```
 
 ### Microservice Generation

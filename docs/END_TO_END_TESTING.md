@@ -223,8 +223,8 @@ dotnet test
 
 ### Test 4: Job Worker
 ```bash
-cd src/jobWorkers
-npm test
+cd tests/ProcessDsl.EntityValidation.Tests
+dotnet test
 # All tests passing
 ```
 

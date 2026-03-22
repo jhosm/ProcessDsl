@@ -451,7 +451,7 @@ echo "  - Swagger: http://localhost:5100/swagger"
 **Solutions:**
 1. Ensure OpenAPI spec is available to job worker
 2. Verify entity schema matches request body
-3. Check job worker is running: `npm start` in `src/jobWorkers`
+3. Check job worker is running: `dotnet run` in `src/ProcessDsl.EntityValidation`
 4. Review Camunda job failures
 
 ### Code Generation Issues

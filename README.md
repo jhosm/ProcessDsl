@@ -279,8 +279,7 @@ ProcessDsl/
 │   │   │   └── Program.cs
 │   │   └── ...
 │   │
-│   └── jobWorkers/           # TypeScript job workers
-│       └── src/
+│   └── ProcessDsl.EntityValidation/  # C# Zeebe job worker (entity validation)
 │
 ├── tests/
 │   ├── test_parser.py        # DSL parser tests
