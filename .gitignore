@@ -164,6 +164,9 @@ cython_debug/
 *.swp
 *.swo
 
+# Claude Code local config
+.claude.local.md
+
 # OS
 .DS_Store
 .DS_Store?
