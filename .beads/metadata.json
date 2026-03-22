@@ -2,6 +2,7 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
+  "dolt_server_port": 3307,
   "dolt_database": "ProcessDsl",
   "project_id": "a467a614-2c5f-400b-b52d-489d54b129ae"
 }
