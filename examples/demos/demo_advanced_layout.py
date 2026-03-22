@@ -7,9 +7,13 @@ BPMN diagrams with proper positioning, gateway branch handling, and
 intelligent edge routing.
 """
 
-from src.bpm_dsl.parser import BPMParser
-from src.bpm_dsl.bpmn_generator import BPMNGenerator
-from src.bpm_dsl.layout_engine import LayoutConfig
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from bpm_dsl.parser import BPMParser
+from bpm_dsl.bpmn_generator import BPMNGenerator
+from bpm_dsl.layout_engine import LayoutConfig
 
 
 def demo_simple_process():

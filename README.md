@@ -33,7 +33,7 @@ A comprehensive platform for defining, generating, and executing business proces
 
 **⚠️ OpenAPI Specification Required**: Every `.bpm` file **must** have a corresponding OpenAPI specification file (`.yaml` or `.yml`) with the same base name in the same directory. This ensures API-first design and enables entity validation.
 
-See **[OPENAPI_VALIDATION.md](OPENAPI_VALIDATION.md)** for detailed requirements and examples.
+See **[OPENAPI_VALIDATION.md](docs/OPENAPI_VALIDATION.md)** for detailed requirements and examples.
 
 ## Quick Start (5 Minutes)
 
@@ -161,9 +161,9 @@ curl -X POST http://localhost:5100/customers \
 
 ### Next Steps
 
-- **Add more tasks:** See [DSL_GRAMMAR.md](DSL_GRAMMAR.md) for all keywords
+- **Add more tasks:** See [DSL_GRAMMAR.md](docs/DSL_GRAMMAR.md) for all keywords
 - **Complex flows:** Add XOR gateways, parallel gateways, etc.
-- **Production:** See [END_TO_END_TESTING.md](END_TO_END_TESTING.md)
+- **Production:** See [END_TO_END_TESTING.md](docs/END_TO_END_TESTING.md)
 
 ## Advanced Features
 
@@ -301,10 +301,10 @@ ProcessDsl/
 
 ## Grammar & Documentation
 
-- **[DSL_GRAMMAR.md](DSL_GRAMMAR.md)**: Complete EBNF grammar specification
-- **[LAYOUT_ALGORITHM.md](LAYOUT_ALGORITHM.md)**: Detailed layout engine documentation
-- **[OPENAPI_VALIDATION.md](OPENAPI_VALIDATION.md)**: OpenAPI file requirements and validation
-- **[QUICKSTART.md](QUICKSTART.md)**: Quick start guide with examples
+- **[DSL_GRAMMAR.md](docs/DSL_GRAMMAR.md)**: Complete EBNF grammar specification
+- **[LAYOUT_ALGORITHM.md](docs/LAYOUT_ALGORITHM.md)**: Detailed layout engine documentation
+- **[OPENAPI_VALIDATION.md](docs/OPENAPI_VALIDATION.md)**: OpenAPI file requirements and validation
+- **[QUICKSTART.md](docs/QUICKSTART.md)**: Quick start guide with examples
 
 ## Examples
 
@@ -318,10 +318,10 @@ Run the demonstration scripts to see all features in action:
 
 ```bash
 # Basic feature demonstration
-python demo.py
+python examples/demos/demo.py
 
-# Advanced layout algorithm demonstration  
-python demo_advanced_layout.py
+# Advanced layout algorithm demonstration
+python examples/demos/demo_advanced_layout.py
 ```
 
 ## Microservices Generation (100% Automated)
@@ -373,7 +373,7 @@ docker run -d -p 26500:26500 -p 8080:8080 --name zeebe camunda/zeebe:latest
 # ✅ All tests passing!
 ```
 
-**See [END_TO_END_TESTING.md](END_TO_END_TESTING.md) for complete testing guide.**
+**See [END_TO_END_TESTING.md](docs/END_TO_END_TESTING.md) for complete testing guide.**
 
 ### What Gets Generated Automatically
 

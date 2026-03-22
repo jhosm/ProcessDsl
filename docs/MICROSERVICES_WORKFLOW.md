@@ -478,6 +478,6 @@ echo "  - Swagger: http://localhost:5100/swagger"
 ## Resources
 
 - [BPM DSL Grammar](DSL_GRAMMAR.md)
-- [ProcessDsl.Orchestration API](src/ProcessDsl.Orchestration/README.md)
+- [ProcessDsl.Orchestration API](../src/ProcessDsl.Orchestration/README.md)
 - [Camunda Documentation](https://docs.camunda.io/)
 - [OpenAPI Specification](https://swagger.io/specification/)

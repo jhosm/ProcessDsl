@@ -197,7 +197,7 @@ The generated BPMN files are fully compatible with Camunda Zeebe:
    ```
 
 2. **Parse errors:**
-   - Check syntax against the grammar in `DSL_GRAMMAR.md`
+   - Check syntax against the grammar in `docs/DSL_GRAMMAR.md`
    - Ensure all IDs are unique
    - Verify all quotes are properly closed
 
@@ -208,8 +208,8 @@ The generated BPMN files are fully compatible with Camunda Zeebe:
 
 ### Getting Help
 
-- Check `DSL_GRAMMAR.md` for complete syntax reference
-- Run `python3 demo.py` for a complete demonstration
+- Check `docs/DSL_GRAMMAR.md` for complete syntax reference
+- Run `python3 examples/demos/demo.py` for a complete demonstration
 - Look at example files in `examples/` directory
 - Run tests with `PYTHONPATH=src python3 -m pytest tests/`
 

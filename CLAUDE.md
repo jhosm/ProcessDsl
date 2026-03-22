@@ -81,6 +81,12 @@ ProcessDsl/
 │   └── ProcessDsl.Orchestration.Tests/  # C# xUnit tests (27 tests)
 │
 ├── examples/                         # Sample .bpm processes and .yaml specs
+│   └── demos/                        # Python demo scripts
+│       ├── demo.py
+│       ├── demo_advanced_layout.py
+│       ├── demo_default_flows.py
+│       └── demo_service_task.py
+│
 ├── templates/                        # OpenAPI Generator custom templates
 │   ├── aspnetcore-default/
 │   └── aspnetcore-processdsl/
@@ -93,11 +99,14 @@ ProcessDsl/
 │
 └── docs/
     ├── DSL_GRAMMAR.md                # Grammar specification
+    ├── DSL_V2_DESIGN.md              # DSL v2 design proposal
     ├── LAYOUT_ALGORITHM.md           # Layout engine details
     ├── PROCESS_ENTITY_VALIDATION.md  # Validation pattern
     ├── OPENAPI_VALIDATION.md         # OpenAPI pairing rules
     ├── MICROSERVICES_WORKFLOW.md      # Microservice generation
-    └── END_TO_END_TESTING.md         # E2E testing guide
+    ├── END_TO_END_TESTING.md         # E2E testing guide
+    ├── QUICKSTART.md                 # Quick start guide
+    └── roadmap.md                    # Project roadmap
 ```
 
 ## Languages & Frameworks

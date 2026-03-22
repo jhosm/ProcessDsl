@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from bpm_dsl.parser import parse_bpm_file
 from bpm_dsl.bpmn_generator import BPMNGenerator
