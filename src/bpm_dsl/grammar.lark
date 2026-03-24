@@ -17,7 +17,7 @@ element: start_element
        | script_call
        | service_task
        | process_entity
-       | xor_gateway
+       | gateway
        | timer_element
 
 // Task 1.4: Extend start element with optional timer property
@@ -39,8 +39,11 @@ service_properties: element_id? task_type? task_retries? task_headers? (input_ma
 process_entity: "processEntity" STRING "{" process_entity_properties "}"
 process_entity_properties: entity_name?
 
-xor_gateway: "xorGateway" STRING "{" gateway_properties "}"
-gateway_properties: element_id? gateway_condition?
+gateway: "gateway" STRING "{" gateway_properties "}"
+gateway_properties: element_id? gateway_type? gateway_condition?
+
+gateway_type: "type:" GATEWAY_TYPE
+GATEWAY_TYPE: "xor" | "parallel"
 
 // Task 1.1: Timer intermediate catch event with duration, date, or cycle
 timer_element: "timer" STRING "{" timer_properties "}"
@@ -86,7 +89,7 @@ gateway_condition: "when:" STRING
 
 flow_section: "flow" "{" flow_definition* "}"
 flow_definition: STRING "->" STRING flow_condition?
-flow_condition: "[" "when:" STRING "]" | "[" DEFAULT "]"
+flow_condition: "[" "when:" STRING "]" | "[" OTHERWISE "]"
 
 string_array: "[" (STRING ("," STRING)*)? "]"
 mapping_array: "[" (variable_mapping ("," variable_mapping)*)? "]"
@@ -97,7 +100,7 @@ task_header: STRING "->" STRING
 // Terminals
 STRING: /"[^"]*"/
 NUMBER: /\d+/
-DEFAULT: "default"
+OTHERWISE: "otherwise"
 BOOLEAN: "true" | "false"
 DURATION_SHORTHAND: /\d+[dhms](\d+[hms]){0,3}/
 COMMENT: /\/\/[^\n]*/
