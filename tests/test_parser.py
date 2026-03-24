@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from bpm_dsl.parser import BPMParser, parse_bpm_string
-from bpm_dsl.ast_nodes import Process, StartEvent, EndEvent, ScriptCall, XORGateway, Flow
+from bpm_dsl.ast_nodes import Process, StartEvent, EndEvent, ScriptCall, Gateway, Flow
 
 
 class TestBPMParser:
@@ -111,43 +111,108 @@ class TestBPMParser:
         assert script_call.output_mappings[1].source == "status"
         assert script_call.output_mappings[1].target == "status"
     
-    def test_xor_gateway(self):
-        """Test parsing XOR gateway elements."""
+    def test_gateway_xor(self):
+        """Test parsing gateway elements with xor type."""
         dsl_content = '''
         process "Gateway Process" {
             id: "gateway-process"
-            
+
             start "Begin" {
                 id: "start-1"
             }
-            
-            xorGateway "Decision Point" {
+
+            gateway "Decision Point" {
                 id: "gateway-1"
+                type: xor
                 when: "amount > 1000"
             }
-            
+
             end "Complete" {
                 id: "end-1"
             }
-            
+
             flow {
                 "start-1" -> "gateway-1"
                 "gateway-1" -> "end-1" [when: "amount <= 1000"]
             }
         }
         '''
-        
+
         process = parse_bpm_string(dsl_content)
-        
-        gateway = process.elements[1]
-        assert isinstance(gateway, XORGateway)
-        assert gateway.name == "Decision Point"
-        assert gateway.id == "gateway-1"
-        assert gateway.condition == "amount > 1000"
-        
+
+        gw = process.elements[1]
+        assert isinstance(gw, Gateway)
+        assert gw.name == "Decision Point"
+        assert gw.id == "gateway-1"
+        assert gw.gateway_type == "xor"
+        assert gw.condition == "amount > 1000"
+
         # Check conditional flow
         flow = process.flows[1]
         assert flow.condition == "amount <= 1000"
+
+    def test_gateway_parallel(self):
+        """Test parsing gateway elements with parallel type."""
+        dsl_content = '''
+        process "Parallel Process" {
+            id: "parallel-process"
+
+            start "Begin" {
+                id: "start-1"
+            }
+
+            gateway "Fork" {
+                id: "fork-1"
+                type: parallel
+            }
+
+            end "Complete" {
+                id: "end-1"
+            }
+
+            flow {
+                "start-1" -> "fork-1"
+                "fork-1" -> "end-1"
+            }
+        }
+        '''
+
+        process = parse_bpm_string(dsl_content)
+
+        gw = process.elements[1]
+        assert isinstance(gw, Gateway)
+        assert gw.gateway_type == "parallel"
+
+    def test_gateway_default_type(self):
+        """Test that gateway defaults to xor when type is omitted."""
+        dsl_content = '''
+        process "Default Type Process" {
+            id: "default-type-process"
+
+            start "Begin" {
+                id: "start-1"
+            }
+
+            gateway "Decision" {
+                id: "gateway-1"
+            }
+
+            end "Complete" {
+                id: "end-1"
+            }
+
+            flow {
+                "start-1" -> "gateway-1"
+                "gateway-1" -> "end-1"
+            }
+        }
+        '''
+
+        process = parse_bpm_string(dsl_content)
+
+        gw = process.elements[1]
+        assert isinstance(gw, Gateway)
+        assert gw.gateway_type == "xor"
     
     def test_complex_process(self):
         """Test parsing the example complex process."""
@@ -155,45 +220,46 @@ class TestBPMParser:
         process "Order Processing" {
             id: "order-process"
             version: "1.0"
-            
+
             start "Order Received" {
                 id: "start-order"
             }
-            
+
             scriptCall "Validate Order" {
                 id: "validate-order"
                 script: "validateOrderData(order)"
                 inputVars: ["order"]
                 outputVars: ["isValid", "validationErrors"]
             }
-            
-            xorGateway "Order Valid?" {
+
+            gateway "Order Valid?" {
                 id: "order-valid-gateway"
+                type: xor
                 when: "isValid == true"
             }
-            
+
             scriptCall "Process Order" {
                 id: "process-order"
                 script: "processValidOrder(order)"
                 inputVars: ["order"]
                 outputVars: ["processedOrder", "orderNumber"]
             }
-            
+
             scriptCall "Handle Invalid Order" {
                 id: "handle-invalid"
                 script: "handleInvalidOrder(order, validationErrors)"
                 inputVars: ["order", "validationErrors"]
                 outputVars: ["rejectionReason"]
             }
-            
+
             end "Order Processed" {
                 id: "end-processed"
             }
-            
+
             end "Order Rejected" {
                 id: "end-rejected"
             }
-            
+
             flow {
                 "start-order" -> "validate-order"
                 "validate-order" -> "order-valid-gateway"
@@ -204,73 +270,74 @@ class TestBPMParser:
             }
         }
         '''
-        
+
         process = parse_bpm_string(dsl_content)
-        
+
         assert process.name == "Order Processing"
         assert process.id == "order-process"
         assert process.version == "1.0"
         assert len(process.elements) == 7  # 1 start, 3 script calls, 1 gateway, 2 ends
         assert len(process.flows) == 6
-        
+
         # Verify element types
         element_types = [type(e).__name__ for e in process.elements]
         assert "StartEvent" in element_types
         assert "EndEvent" in element_types
         assert "ScriptCall" in element_types
-        assert "XORGateway" in element_types
+        assert "Gateway" in element_types
 
-    def test_default_flow(self):
-        """Test parsing of default flows in XOR gateways."""
+    def test_otherwise_flow(self):
+        """Test parsing of otherwise (default) flows in gateways."""
         dsl_content = '''
-        process "Default Flow Test" {
-            id: "default-flow-test"
-            
+        process "Otherwise Flow Test" {
+            id: "otherwise-flow-test"
+
             start "Start" {
                 id: "start-1"
             }
-            
-            xorGateway "Decision" {
+
+            gateway "Decision" {
                 id: "gateway-1"
+                type: xor
             }
-            
+
             end "Path A" {
                 id: "end-a"
             }
-            
+
             end "Path B" {
                 id: "end-b"
             }
-            
+
             flow {
                 "start-1" -> "gateway-1"
                 "gateway-1" -> "end-a" [when: "condition == true"]
-                "gateway-1" -> "end-b" [default]
+                "gateway-1" -> "end-b" [otherwise]
             }
         }
         '''
-        
+
         process = parse_bpm_string(dsl_content)
-        
+
         # Check that we have 3 flows
         assert len(process.flows) == 3
-        
+
         # Check the conditional flow
         conditional_flow = next((f for f in process.flows if f.condition), None)
         assert conditional_flow is not None
         assert conditional_flow.source_id == "gateway-1"
         assert conditional_flow.target_id == "end-a"
         assert conditional_flow.condition == "condition == true"
-        assert conditional_flow.is_default == False
-        
-        # Check the default flow
+        assert conditional_flow.is_default is False
+
+        # Check the otherwise flow (maps to is_default=True)
         default_flow = next((f for f in process.flows if f.is_default), None)
         assert default_flow is not None
         assert default_flow.source_id == "gateway-1"
         assert default_flow.target_id == "end-b"
         assert default_flow.condition is None
-        assert default_flow.is_default == True
-        
+        assert default_flow.is_default is True
+
         # Check the unconditional flow (start to gateway)
         unconditional_flow = next((f for f in process.flows if not f.condition and not f.is_default), None)
         assert unconditional_flow is not None

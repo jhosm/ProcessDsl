@@ -8,7 +8,7 @@ from lark import Lark, Transformer, v_args
 from lark.exceptions import LarkError
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, 
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway,
     Flow, Element, ASTNode, VariableMapping, TaskHeader
 )
 
@@ -151,12 +151,13 @@ class BPMTransformer(Transformer):
         )
     
     @v_args(inline=True)
-    def xor_gateway(self, name: str, properties: dict) -> XORGateway:
-        """Create an XORGateway node."""
+    def gateway(self, name: str, properties: dict) -> Gateway:
+        """Create a Gateway node."""
         element_id = properties.get('id', to_kebab_case(name))
-        return XORGateway(
+        return Gateway(
             name=name,
             id=element_id,
+            gateway_type=properties.get('gateway_type', 'xor'),
             condition=properties.get('condition')
         )
     
@@ -256,6 +257,11 @@ class BPMTransformer(Transformer):
         return {'entity_name': name_value}
     
     @v_args(inline=True)
+    def gateway_type(self, type_value) -> dict:
+        """Extract gateway type (xor, parallel)."""
+        return {'gateway_type': str(type_value)}
+
+    @v_args(inline=True)
     def gateway_condition(self, when: str) -> dict:
         """Extract gateway when condition."""
         return {'condition': when}
@@ -285,13 +291,13 @@ class BPMTransformer(Transformer):
         return Flow(source_id=source_id, target_id=target_id, condition=condition, is_default=is_default)
     
     def flow_condition(self, items):
-        """Extract flow condition or default marker."""
+        """Extract flow condition or otherwise (default) marker."""
         if len(items) == 1:
             item = items[0]
-            # Check if it's a Token with value "default"
-            if hasattr(item, 'value') and item.value == "default":
+            # Check if it's an OTHERWISE token
+            if hasattr(item, 'type') and item.type == "OTHERWISE":
                 return {'is_default': True}
-            elif item == "default":
+            elif hasattr(item, 'value') and item.value == "otherwise":
                 return {'is_default': True}
             else:
                 return {'condition': item}
