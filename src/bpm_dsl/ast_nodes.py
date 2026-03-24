@@ -112,8 +112,9 @@ class ProcessEntity(Element):
 
 
 @dataclass
-class XORGateway(Element):
-    """Exclusive (XOR) gateway element."""
+class Gateway(Element):
+    """Gateway element with configurable type (xor, parallel)."""
+    gateway_type: str = "xor"
     condition: Optional[str] = None
 
 
