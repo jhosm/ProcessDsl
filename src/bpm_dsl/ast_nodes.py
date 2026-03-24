@@ -36,9 +36,25 @@ class Element(ASTNode):
 
 
 @dataclass
+class TimerDefinition(ASTNode):
+    """Timer configuration for timer events and timer start events.
+
+    Exactly one of duration, date, or cycle should be set.
+    All values are ISO 8601 strings (shorthand is desugared at parse time).
+    """
+    duration: Optional[str] = None  # e.g., "PT30M"
+    date: Optional[str] = None      # e.g., "2026-04-01T09:00:00Z"
+    cycle: Optional[str] = None     # e.g., "R/PT1H"
+
+
+@dataclass
 class StartEvent(Element):
-    """Start event element."""
-    pass
+    """Start event element.
+
+    When timer is set, this becomes a timer start event that triggers
+    on a schedule (typically a cycle).
+    """
+    timer: Optional[TimerDefinition] = None
 
 
 @dataclass
@@ -79,6 +95,50 @@ class TaskHeader(ASTNode):
 
 
 @dataclass
+class BoundaryEvent(Element):
+    """Base class for boundary events attached to a task element.
+
+    Boundary events are nested inside task definitions in the DSL but
+    rendered as sibling elements in BPMN with an attachedToRef back to
+    the parent task.
+    """
+    attached_to_ref: Optional[str] = None  # ID of the parent task element
+    interrupting: bool = True              # cancelActivity in BPMN
+
+
+@dataclass
+class BoundaryTimerEvent(BoundaryEvent):
+    """Boundary timer event (onTimer) attached to a service task.
+
+    Triggers after a duration elapses while the parent task is active.
+    """
+    duration: Optional[str] = None  # ISO 8601 duration, e.g., "PT5M"
+
+
+@dataclass
+class BoundaryErrorEvent(BoundaryEvent):
+    """Boundary error event (onError) attached to a service task.
+
+    Catches BPMN errors thrown by the parent task.
+    """
+    error_code: Optional[str] = None  # e.g., "API_ERROR"
+
+
+@dataclass
+class TimerEvent(Element):
+    """Timer intermediate catch event.
+
+    A standalone timer that pauses the process flow for a specified
+    duration, until a date, or on a cycle.
+    """
+    timer: Optional[TimerDefinition] = None
+
+    def __post_init__(self):
+        if self.timer is None:
+            self.timer = TimerDefinition()
+
+
+@dataclass
 class ServiceTask(Element):
     """Service task element for external job workers."""
     task_type: str
@@ -86,7 +146,8 @@ class ServiceTask(Element):
     headers: Optional[List[TaskHeader]] = None
     input_mappings: Optional[List[VariableMapping]] = None
     output_mappings: Optional[List[VariableMapping]] = None
-    
+    boundary_events: Optional[List[BoundaryEvent]] = None
+
     def __post_init__(self):
         if self.retries is None:
             self.retries = 3
@@ -96,6 +157,8 @@ class ServiceTask(Element):
             self.input_mappings = []
         if self.output_mappings is None:
             self.output_mappings = []
+        if self.boundary_events is None:
+            self.boundary_events = []
 
 
 @dataclass
