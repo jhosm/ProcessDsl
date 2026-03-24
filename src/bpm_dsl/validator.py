@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Set, Dict
 from collections import defaultdict
 
-from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, Flow
+from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, Flow
 
 
 @dataclass
@@ -99,7 +99,7 @@ class ProcessValidator:
                 errors.extend(self._validate_service_task(element))
             elif isinstance(element, ProcessEntity):
                 errors.extend(self._validate_process_entity(element))
-            elif isinstance(element, XORGateway):
+            elif isinstance(element, Gateway):
                 errors.extend(self._validate_xor_gateway(element))
         
         # Check for required start and end events
@@ -176,7 +176,7 @@ class ProcessValidator:
         
         return errors
     
-    def _validate_xor_gateway(self, gateway: XORGateway) -> List[str]:
+    def _validate_xor_gateway(self, gateway: Gateway) -> List[str]:
         """Validate XOR gateway element."""
         errors = []
         

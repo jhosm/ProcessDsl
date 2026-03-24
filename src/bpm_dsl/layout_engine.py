@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from collections import defaultdict, deque
 import math
 
-from .ast_nodes import Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, Flow
+from .ast_nodes import Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, Flow
 
 
 @dataclass
@@ -94,7 +94,7 @@ class ProcessGraph:
     
     def is_gateway(self, node_id: str) -> bool:
         """Check if node is a gateway."""
-        return isinstance(self.elements.get(node_id), XORGateway)
+        return isinstance(self.elements.get(node_id), Gateway)
     
     def is_start_event(self, node_id: str) -> bool:
         """Check if node is a start event."""
@@ -114,7 +114,7 @@ class LayoutConfig:
         ScriptCall: {'width': 100, 'height': 80},
         ServiceTask: {'width': 100, 'height': 80},
         ProcessEntity: {'width': 100, 'height': 80},
-        XORGateway: {'width': 50, 'height': 50}
+        Gateway: {'width': 50, 'height': 50}
     }
     
     SPACING = {
