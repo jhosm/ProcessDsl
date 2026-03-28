@@ -225,3 +225,4 @@ src/ProcessDsl.Orchestration/nupkg/ProcessDsl.Orchestration.1.0.0.nupkg
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+.runtime/

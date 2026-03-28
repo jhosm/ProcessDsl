@@ -6,8 +6,9 @@ from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree, re
 from xml.dom import minidom
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, 
-    Flow, Element as BPMElement
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway,
+    Flow, Element as BPMElement, TimerEvent, TimerDefinition,
+    BoundaryTimerEvent, BoundaryErrorEvent,
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig, Bounds
 
@@ -84,6 +85,19 @@ class BPMNGenerator:
             error_def.set("id", "process-entity-validation-error")
             error_def.set("name", "Process Entity Validation Error")
             error_def.set("errorCode", "PROCESS_ENTITY_VALIDATION_ERROR")
+
+        # Add error definitions for boundary error events (deduplicated by error code)
+        seen_error_codes = set()
+        for elem in process.elements:
+            if isinstance(elem, ServiceTask):
+                for be in elem.boundary_events or []:
+                    if isinstance(be, BoundaryErrorEvent) and be.error_code:
+                        if be.error_code not in seen_error_codes:
+                            seen_error_codes.add(be.error_code)
+                            error_def = SubElement(definitions, "error")
+                            error_def.set("id", f"error-{be.error_code}")
+                            error_def.set("name", be.error_code)
+                            error_def.set("errorCode", be.error_code)
         
         # Create process element
         bpmn_process = SubElement(definitions, "process")
@@ -122,15 +136,40 @@ class BPMNGenerator:
                 self._add_service_task(parent, element)
             elif isinstance(element, ProcessEntity):
                 self._add_process_entity(parent, element)
+            elif isinstance(element, TimerEvent):
+                self._add_timer_event(parent, element)
             elif isinstance(element, Gateway):
                 self._add_gateway(parent, element)
     
+    def _add_timer_event_definition(self, parent: Element, timer: TimerDefinition) -> None:
+        """Add a timerEventDefinition child element with duration/date/cycle."""
+        timer_def = SubElement(parent, "timerEventDefinition")
+        if timer.duration:
+            td_elem = SubElement(timer_def, "timeDuration")
+            td_elem.text = timer.duration
+        elif timer.date:
+            td_elem = SubElement(timer_def, "timeDate")
+            td_elem.text = timer.date
+        elif timer.cycle:
+            td_elem = SubElement(timer_def, "timeCycle")
+            td_elem.text = timer.cycle
+
     def _add_start_event(self, parent: Element, start: StartEvent) -> None:
-        """Add a start event to the process."""
+        """Add a start event to the process. Includes timerEventDefinition if timer is set."""
         start_event = SubElement(parent, "startEvent")
         start_event.set("id", start.id)
         start_event.set("name", start.name)
+        if start.timer:
+            self._add_timer_event_definition(start_event, start.timer)
     
+    def _add_timer_event(self, parent: Element, timer_event: TimerEvent) -> None:
+        """Add a timer intermediate catch event to the process."""
+        ice = SubElement(parent, "intermediateCatchEvent")
+        ice.set("id", timer_event.id)
+        ice.set("name", timer_event.name)
+        if timer_event.timer:
+            self._add_timer_event_definition(ice, timer_event.timer)
+
     def _add_end_event(self, parent: Element, end: EndEvent) -> None:
         """Add an end event to the process."""
         end_event = SubElement(parent, "endEvent")
@@ -206,7 +245,36 @@ class BPMNGenerator:
                 output_param = SubElement(io_mapping, "zeebe:output")
                 output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
                 output_param.set("target", mapping.target)  # Process variable
-    
+
+        # Add boundary events as sibling elements with attachedToRef
+        for be in service.boundary_events or []:
+            if isinstance(be, BoundaryTimerEvent):
+                self._add_boundary_timer_event(parent, be, service.id)
+            elif isinstance(be, BoundaryErrorEvent):
+                self._add_boundary_error_event(parent, be, service.id)
+
+    def _add_boundary_timer_event(self, parent: Element, be: BoundaryTimerEvent, attached_to: str) -> None:
+        """Add a boundary timer event element."""
+        boundary = SubElement(parent, "boundaryEvent")
+        boundary.set("id", be.id)
+        boundary.set("name", be.name)
+        boundary.set("attachedToRef", attached_to)
+        boundary.set("cancelActivity", "true" if be.interrupting else "false")
+        if be.duration:
+            timer_def = TimerDefinition(duration=be.duration)
+            self._add_timer_event_definition(boundary, timer_def)
+
+    def _add_boundary_error_event(self, parent: Element, be: BoundaryErrorEvent, attached_to: str) -> None:
+        """Add a boundary error event element."""
+        boundary = SubElement(parent, "boundaryEvent")
+        boundary.set("id", be.id)
+        boundary.set("name", be.name)
+        boundary.set("attachedToRef", attached_to)
+        boundary.set("cancelActivity", "true" if be.interrupting else "false")
+        if be.error_code:
+            error_event_def = SubElement(boundary, "errorEventDefinition")
+            error_event_def.set("errorRef", f"error-{be.error_code}")
+
     def _add_process_entity(self, parent: Element, process_entity: ProcessEntity) -> None:
         """Add a process entity as a service task to the process.
         
@@ -420,6 +488,22 @@ class BPMNGenerator:
             bounds.set("width", str(int(pos.width)))
             bounds.set("height", str(int(pos.height)))
         
+        # Add shapes for boundary events (nested inside service tasks)
+        for element in process.elements:
+            if isinstance(element, ServiceTask):
+                for be in element.boundary_events or []:
+                    if be.id not in element_positions:
+                        continue
+                    shape = SubElement(plane, "bpmndi:BPMNShape")
+                    shape.set("id", f"shape_{be.id}")
+                    shape.set("bpmnElement", be.id)
+                    pos = element_positions[be.id]
+                    bounds = SubElement(shape, "dc:Bounds")
+                    bounds.set("x", str(int(pos.x)))
+                    bounds.set("y", str(int(pos.y)))
+                    bounds.set("width", str(int(pos.width)))
+                    bounds.set("height", str(int(pos.height)))
+
         # Add shapes for generated processEntity validation elements
         for element in process.elements:
             if isinstance(element, ProcessEntity) and hasattr(element, '_generated_elements'):
