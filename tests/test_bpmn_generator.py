@@ -344,5 +344,528 @@ class TestBPMNGenerator:
         assert condition_count == 1
 
 
+class TestTimerEventBPMNGeneration:
+    """Test BPMN generation for timer intermediate catch events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_timer_duration_generates_intermediate_catch_event(self):
+        """Timer with duration emits intermediateCatchEvent + timerEventDefinition/timeDuration."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            timer "Wait" { duration: 30s }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait"
+                "wait" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ices = [e for e in proc if e.tag.endswith('intermediateCatchEvent')]
+        assert len(ices) == 1
+        ice = ices[0]
+        assert ice.get('id') == 'wait'
+        assert ice.get('name') == 'Wait'
+
+        timer_defs = [e for e in ice if e.tag.endswith('timerEventDefinition')]
+        assert len(timer_defs) == 1
+
+        durations = [e for e in timer_defs[0] if e.tag.endswith('timeDuration')]
+        assert len(durations) == 1
+        assert durations[0].text == 'PT30S'
+
+    def test_timer_date_generates_time_date(self):
+        """Timer with date emits timerEventDefinition/timeDate."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            timer "Wait Until" { date: "2026-04-01T09:00:00Z" }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait-until"
+                "wait-until" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ice = [e for e in proc if e.tag.endswith('intermediateCatchEvent')][0]
+        timer_def = [e for e in ice if e.tag.endswith('timerEventDefinition')][0]
+        dates = [e for e in timer_def if e.tag.endswith('timeDate')]
+        assert len(dates) == 1
+        assert dates[0].text == '2026-04-01T09:00:00Z'
+
+    def test_timer_cycle_generates_time_cycle(self):
+        """Timer with cycle emits timerEventDefinition/timeCycle."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            timer "Repeat" { cycle: cycle(1h) }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "repeat"
+                "repeat" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ice = [e for e in proc if e.tag.endswith('intermediateCatchEvent')][0]
+        timer_def = [e for e in ice if e.tag.endswith('timerEventDefinition')][0]
+        cycles = [e for e in timer_def if e.tag.endswith('timeCycle')]
+        assert len(cycles) == 1
+        assert cycles[0].text == 'R/PT1H'
+
+
+class TestTimerStartBPMNGeneration:
+    """Test BPMN generation for timer start events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_timer_start_event_has_timer_definition(self):
+        """Start event with timer: cycle(...) emits timerEventDefinition inside startEvent."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "Every Hour" {
+                timer: cycle(1h)
+            }
+            processEntity "Load" { entityName: "Foo" }
+            end "Done" {}
+            flow {
+                "every-hour" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        starts = [e for e in proc if e.tag.endswith('startEvent')]
+        assert len(starts) == 1
+        start = starts[0]
+        assert start.get('name') == 'Every Hour'
+
+        timer_defs = [e for e in start if e.tag.endswith('timerEventDefinition')]
+        assert len(timer_defs) == 1
+
+        cycles = [e for e in timer_defs[0] if e.tag.endswith('timeCycle')]
+        assert len(cycles) == 1
+        assert cycles[0].text == 'R/PT1H'
+
+    def test_normal_start_event_no_timer_definition(self):
+        """Start event without timer has no timerEventDefinition child."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "Begin" {}
+            processEntity "Load" { entityName: "Foo" }
+            end "Done" {}
+            flow {
+                "begin" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        start = [e for e in proc if e.tag.endswith('startEvent')][0]
+        timer_defs = [e for e in start if e.tag.endswith('timerEventDefinition')]
+        assert len(timer_defs) == 0
+
+
+class TestBoundaryEventBPMNGeneration:
+    """Test BPMN generation for boundary timer and error events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_boundary_timer_event_generation(self):
+        """onTimer boundary event generates boundaryEvent with attachedToRef and timerEventDefinition."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onTimer "Timeout" {
+                    duration: 5m
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 1
+
+        be = boundaries[0]
+        assert be.get('id') == 'timeout'
+        assert be.get('name') == 'Timeout'
+        assert be.get('attachedToRef') == 'call-api'
+        assert be.get('cancelActivity') == 'true'
+
+        timer_defs = [e for e in be if e.tag.endswith('timerEventDefinition')]
+        assert len(timer_defs) == 1
+        durations = [e for e in timer_defs[0] if e.tag.endswith('timeDuration')]
+        assert durations[0].text == 'PT5M'
+
+    def test_boundary_error_event_generation(self):
+        """onError boundary event generates boundaryEvent with errorEventDefinition."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onError "Handle Error" {
+                    errorCode: "API_FAILURE"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 1
+
+        be = boundaries[0]
+        assert be.get('attachedToRef') == 'call-api'
+        assert be.get('cancelActivity') == 'true'
+
+        error_defs = [e for e in be if e.tag.endswith('errorEventDefinition')]
+        assert len(error_defs) == 1
+        assert error_defs[0].get('errorRef') == 'error-API_FAILURE'
+
+    def test_non_interrupting_boundary_cancel_activity_false(self):
+        """Non-interrupting boundary event sets cancelActivity='false'."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onError "Warn" {
+                    errorCode: "SOFT_ERROR"
+                    interrupting: false
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        be = [e for e in proc if e.tag.endswith('boundaryEvent')][0]
+        assert be.get('cancelActivity') == 'false'
+
+    def test_multiple_boundary_events_as_siblings(self):
+        """Multiple boundary events become sibling boundaryEvent elements with correct attachedToRef."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onTimer "Timeout" {
+                    duration: 10m
+                }
+                onError "Error Handler" {
+                    errorCode: "API_ERROR"
+                    interrupting: false
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 2
+
+        # Both attached to the same parent task
+        for be in boundaries:
+            assert be.get('attachedToRef') == 'call-api'
+
+        # One timer, one error
+        timer_bes = [b for b in boundaries if any(c.tag.endswith('timerEventDefinition') for c in b)]
+        error_bes = [b for b in boundaries if any(c.tag.endswith('errorEventDefinition') for c in b)]
+        assert len(timer_bes) == 1
+        assert len(error_bes) == 1
+
+    def test_error_definitions_at_definitions_level(self):
+        """Boundary error events create <error> elements at the definitions level."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onError "Handle Error" {
+                    errorCode: "API_FAILURE"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        # Error definitions are children of <definitions>, not <process>
+        error_defs = [e for e in root if e.tag.endswith('error')]
+        # One from processEntity validation, one from boundary error
+        api_error = next((e for e in error_defs if e.get('errorCode') == 'API_FAILURE'), None)
+        assert api_error is not None
+        assert api_error.get('id') == 'error-API_FAILURE'
+        assert api_error.get('name') == 'API_FAILURE'
+
+    def test_duplicate_error_codes_deduplicated(self):
+        """Two boundary errors with same errorCode produce only one <error> definition."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Task A" {
+                id: "task-a"
+                type: "api-call"
+                onError "Error A" {
+                    errorCode: "SHARED_ERROR"
+                }
+            }
+            serviceTask "Task B" {
+                id: "task-b"
+                type: "api-call"
+                onError "Error B" {
+                    errorCode: "SHARED_ERROR"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "task-a"
+                "task-a" -> "task-b"
+                "task-b" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        error_defs = [e for e in root if e.tag.endswith('error') and e.get('errorCode') == 'SHARED_ERROR']
+        assert len(error_defs) == 1
+
+    def test_boundary_event_diagram_shapes(self):
+        """Boundary events get their own BPMNShape elements in the diagram."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onTimer "Timeout" {
+                    duration: 5m
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        # Verify the boundary event has a shape in the diagram
+        assert 'shape_timeout' in xml
+
+
+class TestEndToEndTimerBoundary:
+    """End-to-end test combining timer start, timer intermediate, and boundary events."""
+
+    def test_full_timer_and_boundary_process(self):
+        """Process with timer start, boundary timeout, and error handling generates valid BPMN."""
+        dsl = '''
+        process "Order Pipeline" {
+            id: "order-pipeline"
+            version: "2.0"
+
+            start "Every 5 Minutes" {
+                timer: cycle(5m)
+            }
+
+            processEntity "Load Order" {
+                entityName: "Order"
+            }
+
+            timer "Cooling Period" {
+                duration: 2h30m
+            }
+
+            serviceTask "Process Order" {
+                type: "order-processor"
+                retries: 5
+                onTimer "Processing Timeout" {
+                    duration: 30m
+                }
+                onError "Order Error" {
+                    errorCode: "ORDER_FAILED"
+                }
+                onError "Retry Warning" {
+                    errorCode: "RETRY_LIMIT"
+                    interrupting: false
+                }
+            }
+
+            end "Complete" {}
+
+            flow {
+                "every-5-minutes" -> "load-order"
+                "load-order" -> "cooling-period"
+                "cooling-period" -> "process-order"
+                "process-order" -> "complete"
+            }
+        }
+        '''
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        xml = generator.generate(process)
+        root = fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml}')
+        proc = [e for e in root if e.tag.endswith('process')][0]
+
+        # Timer start event
+        starts = [e for e in proc if e.tag.endswith('startEvent')]
+        assert len(starts) == 1
+        start_timer_defs = [e for e in starts[0] if e.tag.endswith('timerEventDefinition')]
+        assert len(start_timer_defs) == 1
+        cycle_elem = [e for e in start_timer_defs[0] if e.tag.endswith('timeCycle')]
+        assert cycle_elem[0].text == 'R/PT5M'
+
+        # Timer intermediate catch event with desugared duration
+        ices = [e for e in proc if e.tag.endswith('intermediateCatchEvent')]
+        assert len(ices) == 1
+        assert ices[0].get('id') == 'cooling-period'
+        ice_timer = [e for e in ices[0] if e.tag.endswith('timerEventDefinition')][0]
+        ice_duration = [e for e in ice_timer if e.tag.endswith('timeDuration')]
+        assert ice_duration[0].text == 'PT2H30M'
+
+        # Service task present
+        service_tasks = [e for e in proc if e.tag.endswith('serviceTask')]
+        # process-order + load-order (processEntity also generates a serviceTask)
+        order_task = next(t for t in service_tasks if t.get('id') == 'process-order')
+        assert order_task is not None
+
+        # Boundary events (3 total: 1 timer + 2 errors)
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 3
+        for be in boundaries:
+            assert be.get('attachedToRef') == 'process-order'
+
+        # Verify non-interrupting error boundary
+        retry_be = next(b for b in boundaries if b.get('id') == 'retry-warning')
+        assert retry_be.get('cancelActivity') == 'false'
+
+        # Verify interrupting timer boundary
+        timeout_be = next(b for b in boundaries if b.get('id') == 'processing-timeout')
+        assert timeout_be.get('cancelActivity') == 'true'
+
+        # Error definitions at definitions level (deduplicated)
+        error_defs = [e for e in root if e.tag.endswith('error')]
+        error_codes = {e.get('errorCode') for e in error_defs}
+        assert 'ORDER_FAILED' in error_codes
+        assert 'RETRY_LIMIT' in error_codes
+
+        # Sequence flows exist
+        flows = [e for e in proc if e.tag.endswith('sequenceFlow')]
+        assert len(flows) >= 4  # At least the 4 explicit flows (processEntity adds more)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
