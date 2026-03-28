@@ -1,10 +1,15 @@
 """Process validation for BPM DSL."""
 
+import re
 from dataclasses import dataclass
 from typing import List, Set, Dict
 from collections import defaultdict
 
-from .ast_nodes import Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, Flow
+from .ast_nodes import (
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
+    Gateway, Flow, TimerEvent, TimerDefinition,
+    BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
+)
 
 
 @dataclass
@@ -32,7 +37,11 @@ class ProcessValidator:
         
         # Element validation
         errors.extend(self._validate_elements(process))
-        
+
+        # Timer and boundary event validation
+        errors.extend(self._validate_timer_events(process))
+        errors.extend(self._validate_boundary_events(process))
+
         # Flow validation
         errors.extend(self._validate_flows(process))
         
@@ -101,7 +110,8 @@ class ProcessValidator:
                 errors.extend(self._validate_process_entity(element))
             elif isinstance(element, Gateway):
                 errors.extend(self._validate_gateway(element))
-        
+            # TimerEvent validated separately in _validate_timer_events
+
         # Check for required start and end events
         if not start_events:
             errors.append("Process must have at least one start event")
@@ -189,6 +199,131 @@ class ProcessValidator:
 
         return errors
     
+    def _validate_timer_events(self, process: Process) -> List[str]:
+        """Validate timer events and timer start events."""
+        errors = []
+
+        for element in process.elements:
+            if isinstance(element, TimerEvent):
+                td = element.timer
+                if td is None or not (td.duration or td.date or td.cycle):
+                    errors.append(
+                        f"Timer event '{element.id}' must specify at least one of "
+                        f"duration, date, or cycle"
+                    )
+                else:
+                    errors.extend(self._validate_timer_definition(td, element.id))
+
+            elif isinstance(element, StartEvent) and element.timer is not None:
+                td = element.timer
+                if not (td.duration or td.date or td.cycle):
+                    errors.append(
+                        f"Timer start event '{element.id}' must specify at least one of "
+                        f"duration, date, or cycle"
+                    )
+                else:
+                    errors.extend(self._validate_timer_definition(td, element.id))
+
+        return errors
+
+    def _validate_timer_definition(self, td: TimerDefinition, element_id: str) -> List[str]:
+        """Validate ISO 8601 values inside a TimerDefinition."""
+        errors = []
+
+        if td.duration and not self._is_valid_iso8601_duration(td.duration):
+            errors.append(
+                f"Timer '{element_id}' has invalid ISO 8601 duration: {td.duration}"
+            )
+
+        if td.date and not self._is_valid_iso8601_date(td.date):
+            errors.append(
+                f"Timer '{element_id}' has invalid ISO 8601 date: {td.date}"
+            )
+
+        if td.cycle and not self._is_valid_iso8601_cycle(td.cycle):
+            errors.append(
+                f"Timer '{element_id}' has invalid ISO 8601 cycle: {td.cycle}"
+            )
+
+        return errors
+
+    def _validate_boundary_events(self, process: Process) -> List[str]:
+        """Validate boundary events across all service tasks."""
+        errors = []
+        # Collect all top-level element IDs for uniqueness check
+        all_ids: Set[str] = {e.id for e in process.elements}
+        boundary_ids: Set[str] = set()
+        element_ids: Set[str] = {e.id for e in process.elements}
+
+        for element in process.elements:
+            if not isinstance(element, ServiceTask):
+                continue
+
+            for be in element.boundary_events or []:
+                # ID uniqueness: check against top-level IDs and other boundary IDs
+                if be.id in all_ids or be.id in boundary_ids:
+                    errors.append(
+                        f"Boundary event '{be.id}' has a duplicate ID "
+                        f"(conflicts with another element or boundary event)"
+                    )
+                boundary_ids.add(be.id)
+
+                # attached_to_ref must point to the parent task
+                if not be.attached_to_ref:
+                    errors.append(
+                        f"Boundary event '{be.id}' has no attached_to_ref"
+                    )
+                elif be.attached_to_ref not in element_ids:
+                    errors.append(
+                        f"Boundary event '{be.id}' references non-existent "
+                        f"parent task: {be.attached_to_ref}"
+                    )
+
+                # BoundaryTimerEvent must have a duration
+                if isinstance(be, BoundaryTimerEvent):
+                    if not be.duration:
+                        errors.append(
+                            f"Boundary timer event '{be.id}' must specify a duration"
+                        )
+                    elif not self._is_valid_iso8601_duration(be.duration):
+                        errors.append(
+                            f"Boundary timer event '{be.id}' has invalid "
+                            f"ISO 8601 duration: {be.duration}"
+                        )
+
+                # BoundaryErrorEvent must have an error_code
+                if isinstance(be, BoundaryErrorEvent):
+                    if not be.error_code:
+                        errors.append(
+                            f"Boundary error event '{be.id}' must specify an errorCode"
+                        )
+
+        return errors
+
+    @staticmethod
+    def _is_valid_iso8601_duration(value: str) -> bool:
+        """Check if a string is a valid ISO 8601 duration (e.g., PT30M, P1DT2H)."""
+        return bool(re.fullmatch(
+            r'P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?',
+            value,
+        )) and value != "P" and value != "PT"
+
+    @staticmethod
+    def _is_valid_iso8601_date(value: str) -> bool:
+        """Check if a string looks like a valid ISO 8601 date/datetime."""
+        return bool(re.fullmatch(
+            r'\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?',
+            value,
+        ))
+
+    @staticmethod
+    def _is_valid_iso8601_cycle(value: str) -> bool:
+        """Check if a string is a valid ISO 8601 repeating interval (e.g., R/PT1H, R3/PT5M)."""
+        return bool(re.fullmatch(
+            r'R\d*/P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?',
+            value,
+        ))
+
     def _validate_flows(self, process: Process) -> List[str]:
         """Validate sequence flows."""
         errors = []
