@@ -867,5 +867,467 @@ class TestEndToEndTimerBoundary:
         assert len(flows) >= 4  # At least the 4 explicit flows (processEntity adds more)
 
 
+class TestMessageStartBPMNGeneration:
+    """Test BPMN generation for message start events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_message_start_event_has_message_event_definition(self):
+        """Start event with message: emits messageEventDefinition with messageRef."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Order" {
+                message: "order-placed"
+            }
+            processEntity "Load" { entityName: "Order" }
+            end "Done" {}
+            flow {
+                "on-order" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        starts = [e for e in proc if e.tag.endswith('startEvent')]
+        assert len(starts) == 1
+        start = starts[0]
+        assert start.get('name') == 'On Order'
+
+        msg_defs = [e for e in start if e.tag.endswith('messageEventDefinition')]
+        assert len(msg_defs) == 1
+        assert msg_defs[0].get('messageRef') == 'message-order-placed'
+
+    def test_message_start_event_creates_message_definition(self):
+        """Message start event creates a top-level <message> element."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Order" {
+                message: "order-placed"
+            }
+            processEntity "Load" { entityName: "Order" }
+            end "Done" {}
+            flow {
+                "on-order" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        assert any(m.get('name') == 'order-placed' for m in msg_defs)
+
+    def test_normal_start_event_no_message_definition(self):
+        """Start event without message has no messageEventDefinition child."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "Begin" {}
+            processEntity "Load" { entityName: "Foo" }
+            end "Done" {}
+            flow {
+                "begin" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        start = [e for e in proc if e.tag.endswith('startEvent')][0]
+        msg_defs = [e for e in start if e.tag.endswith('messageEventDefinition')]
+        assert len(msg_defs) == 0
+
+
+class TestReceiveMessageBPMNGeneration:
+    """Test BPMN generation for receiveMessage intermediate catch events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_receive_message_generates_intermediate_catch_event(self):
+        """receiveMessage emits intermediateCatchEvent with messageEventDefinition and zeebe:subscription."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait For Payment" {
+                message: "payment-received"
+                correlationKey: "orderId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait-for-payment"
+                "wait-for-payment" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ices = [e for e in proc if e.tag.endswith('intermediateCatchEvent')]
+        assert len(ices) == 1
+        ice = ices[0]
+        assert ice.get('id') == 'wait-for-payment'
+        assert ice.get('name') == 'Wait For Payment'
+
+        # messageEventDefinition with messageRef
+        msg_defs = [e for e in ice if e.tag.endswith('messageEventDefinition')]
+        assert len(msg_defs) == 1
+        assert msg_defs[0].get('messageRef') == 'message-payment-received'
+
+        # zeebe:subscription with correlationKey
+        ext_elements = [e for e in ice if e.tag.endswith('extensionElements')]
+        assert len(ext_elements) == 1
+        subscriptions = [e for e in ext_elements[0] if e.tag.endswith('subscription')]
+        assert len(subscriptions) == 1
+        assert subscriptions[0].get('correlationKey') == '=orderId'
+
+    def test_receive_message_creates_message_definition(self):
+        """receiveMessage creates a top-level <message> element."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait" {
+                message: "signal"
+                correlationKey: "processId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait"
+                "wait" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        assert any(m.get('name') == 'signal' for m in msg_defs)
+        assert any(m.get('id') == 'message-signal' for m in msg_defs)
+
+
+class TestBoundaryMessageBPMNGeneration:
+    """Test BPMN generation for onMessage boundary events."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_boundary_message_event_generation(self):
+        """onMessage boundary event generates boundaryEvent with messageEventDefinition and zeebe:subscription."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Process Order" {
+                type: "order-processor"
+                onMessage "Payment Update" {
+                    message: "payment-status"
+                    correlationKey: "orderId"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "process-order"
+                "process-order" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 1
+
+        be = boundaries[0]
+        assert be.get('id') == 'payment-update'
+        assert be.get('name') == 'Payment Update'
+        assert be.get('attachedToRef') == 'process-order'
+        assert be.get('cancelActivity') == 'true'
+
+        msg_defs = [e for e in be if e.tag.endswith('messageEventDefinition')]
+        assert len(msg_defs) == 1
+        assert msg_defs[0].get('messageRef') == 'message-payment-status'
+
+        ext_elements = [e for e in be if e.tag.endswith('extensionElements')]
+        assert len(ext_elements) == 1
+        subscriptions = [e for e in ext_elements[0] if e.tag.endswith('subscription')]
+        assert len(subscriptions) == 1
+        assert subscriptions[0].get('correlationKey') == '=orderId'
+
+    def test_boundary_message_non_interrupting(self):
+        """Non-interrupting onMessage boundary sets cancelActivity='false'."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Long Task" {
+                type: "worker"
+                onMessage "Status Check" {
+                    message: "check-status"
+                    correlationKey: "taskId"
+                    interrupting: false
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "long-task"
+                "long-task" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        be = [e for e in proc if e.tag.endswith('boundaryEvent')][0]
+        assert be.get('cancelActivity') == 'false'
+
+
+class TestMessageDeduplication:
+    """Test that duplicate message names produce only one <message> definition."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def test_same_message_name_deduplicated(self):
+        """Two events referencing the same message name produce one <message> element."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Signal" {
+                message: "shared-signal"
+            }
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait For Signal" {
+                message: "shared-signal"
+                correlationKey: "processId"
+            }
+            end "E" {}
+            flow {
+                "on-signal" -> "load"
+                "load" -> "wait-for-signal"
+                "wait-for-signal" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        shared = [m for m in msg_defs if m.get('name') == 'shared-signal']
+        assert len(shared) == 1
+
+    def test_different_message_names_not_deduplicated(self):
+        """Different message names each get their own <message> element."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Order" {
+                message: "order-placed"
+            }
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait For Payment" {
+                message: "payment-received"
+                correlationKey: "orderId"
+            }
+            end "E" {}
+            flow {
+                "on-order" -> "load"
+                "load" -> "wait-for-payment"
+                "wait-for-payment" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        names = {m.get('name') for m in msg_defs}
+        assert 'order-placed' in names
+        assert 'payment-received' in names
+
+    def test_boundary_message_deduplication_with_receive(self):
+        """Boundary message and receive message with same name produce one definition."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Work" {
+                type: "worker"
+                onMessage "Cancel" {
+                    message: "cancel-order"
+                    correlationKey: "orderId"
+                }
+            }
+            receiveMessage "Also Cancel" {
+                message: "cancel-order"
+                correlationKey: "orderId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "work"
+                "work" -> "also-cancel"
+                "also-cancel" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        cancel_defs = [m for m in msg_defs if m.get('name') == 'cancel-order']
+        assert len(cancel_defs) == 1
+
+
+class TestEndToEndAsyncWebhook:
+    """End-to-end test: async webhook process using message start, receive, and boundary."""
+
+    def test_async_webhook_process(self):
+        """Full process: message start, service task with message boundary, receive message."""
+        dsl = '''
+        process "Async Webhook Pipeline" {
+            id: "async-webhook"
+            version: "1.0"
+
+            start "Webhook Received" {
+                message: "webhook-incoming"
+            }
+
+            processEntity "Load Webhook" {
+                entityName: "WebhookPayload"
+            }
+
+            serviceTask "Process Webhook" {
+                type: "webhook-processor"
+                retries: 5
+                onMessage "Cancellation" {
+                    message: "cancel-webhook"
+                    correlationKey: "webhookId"
+                }
+                onTimer "Webhook Timeout" {
+                    duration: 30m
+                }
+            }
+
+            receiveMessage "Wait For Confirmation" {
+                message: "webhook-confirmed"
+                correlationKey: "webhookId"
+            }
+
+            end "Complete" {}
+
+            flow {
+                "webhook-received" -> "load-webhook"
+                "load-webhook" -> "process-webhook"
+                "process-webhook" -> "wait-for-confirmation"
+                "wait-for-confirmation" -> "complete"
+            }
+        }
+        '''
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        xml = generator.generate(process)
+        root = fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml}')
+        proc = [e for e in root if e.tag.endswith('process')][0]
+
+        # Message start event
+        starts = [e for e in proc if e.tag.endswith('startEvent')]
+        assert len(starts) == 1
+        start_msg_defs = [e for e in starts[0] if e.tag.endswith('messageEventDefinition')]
+        assert len(start_msg_defs) == 1
+        assert start_msg_defs[0].get('messageRef') == 'message-webhook-incoming'
+
+        # Service task present
+        service_tasks = [e for e in proc if e.tag.endswith('serviceTask')]
+        webhook_task = next(t for t in service_tasks if t.get('id') == 'process-webhook')
+        assert webhook_task is not None
+
+        # Boundary events (1 message + 1 timer)
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 2
+        for be in boundaries:
+            assert be.get('attachedToRef') == 'process-webhook'
+
+        msg_boundaries = [b for b in boundaries if any(c.tag.endswith('messageEventDefinition') for c in b)]
+        timer_boundaries = [b for b in boundaries if any(c.tag.endswith('timerEventDefinition') for c in b)]
+        assert len(msg_boundaries) == 1
+        assert len(timer_boundaries) == 1
+
+        # Boundary message event has zeebe:subscription
+        msg_be = msg_boundaries[0]
+        ext_elements = [e for e in msg_be if e.tag.endswith('extensionElements')]
+        assert len(ext_elements) == 1
+        subscriptions = [e for e in ext_elements[0] if e.tag.endswith('subscription')]
+        assert subscriptions[0].get('correlationKey') == '=webhookId'
+
+        # Receive message intermediate catch event
+        ices = [e for e in proc if e.tag.endswith('intermediateCatchEvent')]
+        assert len(ices) == 1
+        assert ices[0].get('id') == 'wait-for-confirmation'
+        ice_msg_defs = [e for e in ices[0] if e.tag.endswith('messageEventDefinition')]
+        assert len(ice_msg_defs) == 1
+        assert ice_msg_defs[0].get('messageRef') == 'message-webhook-confirmed'
+
+        # Top-level message definitions: 3 unique message names
+        msg_defs = [e for e in root if e.tag.endswith('message')]
+        msg_names = {m.get('name') for m in msg_defs}
+        assert msg_names == {'webhook-incoming', 'cancel-webhook', 'webhook-confirmed'}
+
+        # Sequence flows
+        flows = [e for e in proc if e.tag.endswith('sequenceFlow')]
+        assert len(flows) >= 4
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

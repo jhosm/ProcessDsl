@@ -523,6 +523,202 @@ class TestBoundaryEventValidation:
         assert any("non-existent" in e for e in result.errors)
 
 
+class TestMessageEventValidation:
+    """Validator rules for message events (start, receive, boundary)."""
+
+    def setup_method(self):
+        self.validator = ProcessValidator()
+
+    def _make_process(self, dsl: str):
+        return parse_bpm_string(dsl)
+
+    # --- Valid message events ---
+
+    def test_message_start_event_valid(self):
+        """Message start event with non-empty message name passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Order" {
+                message: "order-placed"
+            }
+            processEntity "Load" { entityName: "Order" }
+            end "Done" {}
+            flow {
+                "on-order" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    def test_receive_message_valid(self):
+        """receiveMessage with non-empty message and correlationKey passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait" {
+                message: "payment-received"
+                correlationKey: "orderId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait"
+                "wait" -> "e"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    def test_boundary_message_valid(self):
+        """onMessage boundary event with message and correlationKey passes."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Work" {
+                type: "worker"
+                onMessage "Cancel" {
+                    message: "cancel-signal"
+                    correlationKey: "taskId"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "work"
+                "work" -> "e"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    # --- Invalid message events ---
+
+    def test_message_start_event_empty_message(self):
+        """Message start event with empty message name fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, ProcessEntity, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="Bad Start", id="bad-start", message=""),
+                ProcessEntity(name="Load", id="load", entity_name="Foo"),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="bad-start", target_id="load"),
+                Flow(source_id="load", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("Message start event" in e and "non-empty message" in e for e in result.errors)
+
+    def test_receive_message_empty_message_name(self):
+        """receiveMessage with empty message name fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, ProcessEntity,
+            ReceiveMessageEvent, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                ProcessEntity(name="Load", id="load", entity_name="Foo"),
+                ReceiveMessageEvent(
+                    name="Bad Wait", id="bad-wait",
+                    message="", correlation_key="orderId"
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="load"),
+                Flow(source_id="load", target_id="bad-wait"),
+                Flow(source_id="bad-wait", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("non-empty message name" in e for e in result.errors)
+
+    def test_receive_message_empty_correlation_key(self):
+        """receiveMessage with empty correlationKey fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, ProcessEntity,
+            ReceiveMessageEvent, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                ProcessEntity(name="Load", id="load", entity_name="Foo"),
+                ReceiveMessageEvent(
+                    name="Bad Wait", id="bad-wait",
+                    message="signal", correlation_key=""
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="load"),
+                Flow(source_id="load", target_id="bad-wait"),
+                Flow(source_id="bad-wait", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("non-empty correlationKey" in e for e in result.errors)
+
+    def test_boundary_message_empty_correlation_key(self):
+        """Boundary message event without correlationKey fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, ProcessEntity, ServiceTask,
+            BoundaryMessageEvent, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                ProcessEntity(name="Load", id="load", entity_name="Foo"),
+                ServiceTask(
+                    name="Task", id="task", task_type="worker",
+                    boundary_events=[
+                        BoundaryMessageEvent(
+                            name="Bad Msg", id="bad-msg",
+                            attached_to_ref="task",
+                            message="signal", correlation_key=""
+                        ),
+                    ],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="load"),
+                Flow(source_id="load", target_id="task"),
+                Flow(source_id="task", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("correlationKey" in e for e in result.errors)
+
+
 class TestISO8601Validation:
     """Unit tests for the ISO 8601 validation helpers in ProcessValidator."""
 
