@@ -347,6 +347,11 @@ class BPMTransformer(Transformer):
         return {'entity_name': name_value}
     
     @v_args(inline=True)
+    def gateway_type(self, type_value) -> dict:
+        """Extract gateway type (xor, parallel)."""
+        return {'gateway_type': str(type_value)}
+
+    @v_args(inline=True)
     def gateway_condition(self, when: str) -> dict:
         """Extract gateway when condition."""
         return {'condition': when}
@@ -496,10 +501,10 @@ class BPMTransformer(Transformer):
             # OTHERWISE terminal is transformed into {'is_default': True}
             if isinstance(item, dict) and item.get('is_default'):
                 return {'is_default': True}
-            # Legacy support for "default" token
-            if hasattr(item, 'value') and item.value == "default":
+            # Fallback: check for OTHERWISE token type
+            if hasattr(item, 'type') and item.type == "OTHERWISE":
                 return {'is_default': True}
-            elif item == "default":
+            elif hasattr(item, 'value') and item.value == "otherwise":
                 return {'is_default': True}
             else:
                 return {'condition': item}

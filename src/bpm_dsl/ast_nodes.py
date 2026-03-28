@@ -181,6 +181,10 @@ class Gateway(Element):
     condition: Optional[str] = None
 
 
+# Backward-compat alias — removed once generator/validator/layout beads migrate
+XORGateway = Gateway
+
+
 @dataclass
 class Flow(ASTNode):
     """Sequence flow between elements."""

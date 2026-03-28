@@ -115,8 +115,9 @@ class TestBPMParser:
         assert script_call.output_mappings[1].source == "status"
         assert script_call.output_mappings[1].target == "status"
 
+
     def test_gateway(self):
-        """Test parsing gateway elements."""
+        """Test parsing gateway elements with xor type."""
         dsl_content = '''
         process "Gateway Process" {
             id: "gateway-process"
@@ -155,6 +156,69 @@ class TestBPMParser:
         flow = process.flows[1]
         assert flow.condition == "amount <= 1000"
 
+    def test_gateway_parallel(self):
+        """Test parsing gateway elements with parallel type."""
+        dsl_content = '''
+        process "Parallel Process" {
+            id: "parallel-process"
+
+            start "Begin" {
+                id: "start-1"
+            }
+
+            gateway "Fork" {
+                id: "fork-1"
+                type: parallel
+            }
+
+            end "Complete" {
+                id: "end-1"
+            }
+
+            flow {
+                "start-1" -> "fork-1"
+                "fork-1" -> "end-1"
+            }
+        }
+        '''
+
+        process = parse_bpm_string(dsl_content)
+
+        gw = process.elements[1]
+        assert isinstance(gw, Gateway)
+        assert gw.gateway_type == "parallel"
+
+    def test_gateway_default_type(self):
+        """Test that gateway defaults to xor when type is omitted."""
+        dsl_content = '''
+        process "Default Type Process" {
+            id: "default-type-process"
+
+            start "Begin" {
+                id: "start-1"
+            }
+
+            gateway "Decision" {
+                id: "gateway-1"
+            }
+
+            end "Complete" {
+                id: "end-1"
+            }
+
+            flow {
+                "start-1" -> "gateway-1"
+                "gateway-1" -> "end-1"
+            }
+        }
+        '''
+
+        process = parse_bpm_string(dsl_content)
+
+        gw = process.elements[1]
+        assert isinstance(gw, Gateway)
+        assert gw.gateway_type == "xor"
+
     def test_complex_process(self):
         """Test parsing the example complex process."""
         dsl_content = '''
@@ -175,6 +239,7 @@ class TestBPMParser:
 
             gateway "Order Valid?" {
                 id: "order-valid-gateway"
+                type: xor
                 when: "isValid == true"
             }
 
@@ -238,6 +303,7 @@ class TestBPMParser:
 
             gateway "Decision" {
                 id: "gateway-1"
+                type: xor
             }
 
             end "Path A" {
@@ -267,15 +333,15 @@ class TestBPMParser:
         assert conditional_flow.source_id == "gateway-1"
         assert conditional_flow.target_id == "end-a"
         assert conditional_flow.condition == "condition == true"
-        assert conditional_flow.is_default == False
+        assert conditional_flow.is_default is False
 
-        # Check the otherwise (default) flow
+        # Check the otherwise flow (maps to is_default=True)
         default_flow = next((f for f in process.flows if f.is_default), None)
         assert default_flow is not None
         assert default_flow.source_id == "gateway-1"
         assert default_flow.target_id == "end-b"
         assert default_flow.condition is None
-        assert default_flow.is_default == True
+        assert default_flow.is_default is True
 
         # Check the unconditional flow (start to gateway)
         unconditional_flow = next((f for f in process.flows if not f.condition and not f.is_default), None)
