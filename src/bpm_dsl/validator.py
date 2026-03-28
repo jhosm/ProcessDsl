@@ -100,7 +100,7 @@ class ProcessValidator:
             elif isinstance(element, ProcessEntity):
                 errors.extend(self._validate_process_entity(element))
             elif isinstance(element, Gateway):
-                errors.extend(self._validate_xor_gateway(element))
+                errors.extend(self._validate_gateway(element))
         
         # Check for required start and end events
         if not start_events:
@@ -176,32 +176,47 @@ class ProcessValidator:
         
         return errors
     
-    def _validate_xor_gateway(self, gateway: Gateway) -> List[str]:
-        """Validate XOR gateway element."""
+    def _validate_gateway(self, gateway: Gateway) -> List[str]:
+        """Validate gateway element."""
         errors = []
-        
-        # XOR gateways should have conditions on outgoing flows
-        # This will be validated in flow validation
-        
+
+        valid_types = {"xor", "parallel"}
+        if gateway.gateway_type not in valid_types:
+            errors.append(
+                f"Gateway '{gateway.id}' has invalid type '{gateway.gateway_type}'. "
+                f"Valid types: {', '.join(sorted(valid_types))}"
+            )
+
         return errors
     
     def _validate_flows(self, process: Process) -> List[str]:
         """Validate sequence flows."""
         errors = []
         element_ids = {element.id for element in process.elements}
-        
+        element_lookup = {e.id: e for e in process.elements}
+
         for flow in process.flows:
             # Check if source and target elements exist
             if flow.source_id not in element_ids:
                 errors.append(f"Flow references non-existent source element: {flow.source_id}")
-            
+
             if flow.target_id not in element_ids:
                 errors.append(f"Flow references non-existent target element: {flow.target_id}")
-            
+
             # Validate condition syntax (basic check)
             if flow.condition and not self._is_valid_condition(flow.condition):
                 errors.append(f"Invalid condition syntax in flow {flow.source_id} -> {flow.target_id}: {flow.condition}")
-        
+
+            # Parallel gateways must not have conditional flows
+            source = element_lookup.get(flow.source_id)
+            if (flow.condition
+                    and isinstance(source, Gateway)
+                    and source.gateway_type == "parallel"):
+                errors.append(
+                    f"Parallel gateway '{source.id}' must not have conditional flows. "
+                    f"Found condition on flow to '{flow.target_id}': {flow.condition}"
+                )
+
         return errors
     
     def _validate_structure(self, process: Process) -> List[str]:
