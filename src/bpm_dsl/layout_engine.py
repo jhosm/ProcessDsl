@@ -373,7 +373,7 @@ class BPMNLayoutEngine:
                 self.edge_routes[route_id] = route
 
     def _position_boundary_events(self):
-        """Position boundary events on the bottom edge of their parent task."""
+        """Position boundary events on the bottom edge of their parent task or subprocess."""
         for elem_id, element in self.graph.elements.items():
             if not isinstance(element, (ServiceTask, Subprocess)):
                 continue
