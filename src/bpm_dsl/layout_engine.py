@@ -17,7 +17,7 @@ import math
 from .ast_nodes import (
     Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
     Gateway, Flow, TimerEvent, BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
-    ReceiveMessageEvent, BoundaryMessageEvent,
+    ReceiveMessageEvent, BoundaryMessageEvent, Subprocess, CallActivity,
 )
 
 
@@ -72,7 +72,7 @@ class ProcessGraph:
         self.elements = {elem.id: elem for elem in process.elements}
         # Include boundary events so they can participate in flow routing
         for elem in process.elements:
-            if isinstance(elem, ServiceTask) and elem.boundary_events:
+            if isinstance(elem, (ServiceTask, Subprocess)) and elem.boundary_events:
                 for be in elem.boundary_events:
                     self.elements[be.id] = be
         self.flows = process.flows
@@ -129,6 +129,8 @@ class LayoutConfig:
         BoundaryErrorEvent: {'width': 36, 'height': 36},
         ReceiveMessageEvent: {'width': 36, 'height': 36},
         BoundaryMessageEvent: {'width': 36, 'height': 36},
+        CallActivity: {'width': 100, 'height': 80},
+        Subprocess: {'width': 200, 'height': 150},  # minimum; actual computed from children
     }
     
     SPACING = {
@@ -136,7 +138,8 @@ class LayoutConfig:
         'vertical': 100,
         'branch': 80,
         'gateway_branch': 120,
-        'level': 200
+        'level': 200,
+        'subprocess_padding': 30,
     }
     
     MARGINS = {
@@ -175,10 +178,13 @@ class BPMNLayoutEngine:
         # Phase 3: Handle gateway branches
         self._position_gateway_branches()
 
-        # Phase 4: Position boundary events on parent task edges
+        # Phase 4: Lay out subprocess internals and resize containers
+        self._layout_subprocesses()
+
+        # Phase 5: Position boundary events on parent task edges
         self._position_boundary_events()
 
-        # Phase 5: Calculate edge routes
+        # Phase 6: Calculate edge routes
         self._calculate_edge_routes()
         
         return self.positions, self.edge_routes
@@ -298,10 +304,78 @@ class BPMNLayoutEngine:
                         height=successor_pos.height
                     )
     
+    def _layout_subprocesses(self):
+        """Lay out subprocess internals and resize containers to fit children."""
+        for elem_id, element in self.graph.elements.items():
+            if not isinstance(element, Subprocess):
+                continue
+            if not element.elements:
+                continue
+
+            parent_pos = self.positions.get(elem_id)
+            if not parent_pos:
+                continue
+
+            # Create a temporary Process to reuse the layout engine recursively
+            sub_process = Process(
+                name=element.name,
+                id=element.id,
+                elements=element.elements,
+                flows=element.flows or [],
+            )
+            sub_engine = BPMNLayoutEngine(self.config)
+            child_positions, child_routes = sub_engine.calculate_layout(sub_process)
+
+            if not child_positions:
+                continue
+
+            # Compute bounding box of child elements
+            child_min_x = min(p.x for p in child_positions.values())
+            child_min_y = min(p.y for p in child_positions.values())
+            child_max_x = max(p.right for p in child_positions.values())
+            child_max_y = max(p.bottom for p in child_positions.values())
+
+            padding = self.config.SPACING['subprocess_padding']
+
+            # Container size = children bounding box + padding on all sides
+            container_w = (child_max_x - child_min_x) + 2 * padding
+            container_h = (child_max_y - child_min_y) + 2 * padding
+
+            # Enforce minimum dimensions from config
+            min_dims = self.config.ELEMENT_DIMENSIONS[Subprocess]
+            container_w = max(container_w, min_dims['width'])
+            container_h = max(container_h, min_dims['height'])
+
+            # Update the subprocess container bounds
+            self.positions[elem_id] = Bounds(
+                x=parent_pos.x,
+                y=parent_pos.y,
+                width=container_w,
+                height=container_h,
+            )
+
+            # Offset child positions relative to container top-left + padding
+            offset_x = parent_pos.x + padding - child_min_x
+            offset_y = parent_pos.y + padding - child_min_y
+            for child_id, child_pos in child_positions.items():
+                self.positions[child_id] = Bounds(
+                    x=child_pos.x + offset_x,
+                    y=child_pos.y + offset_y,
+                    width=child_pos.width,
+                    height=child_pos.height,
+                )
+
+            # Offset child edge routes
+            for route_id, route in child_routes.items():
+                for wp in route.waypoints:
+                    wp.x += offset_x
+                    wp.y += offset_y
+                self.edge_routes[route_id] = route
+
     def _position_boundary_events(self):
         """Position boundary events on the bottom edge of their parent task."""
         for elem_id, element in self.graph.elements.items():
-            if not isinstance(element, ServiceTask):
+            if not isinstance(element, (ServiceTask, Subprocess)):
                 continue
             if not element.boundary_events:
                 continue
