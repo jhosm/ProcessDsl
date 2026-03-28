@@ -166,13 +166,21 @@ class ReceiveMessageEvent(Element):
 
 @dataclass
 class ServiceTask(Element):
-    """Service task element for external job workers."""
+    """Service task element for external job workers.
+
+    Multi-instance fields (forEach, as_var, parallel) enable iteration
+    over a collection variable.  When forEach is set, the BPMN generator
+    emits a <multiInstanceLoopCharacteristics> child element.
+    """
     task_type: str
     retries: Optional[int] = None
     headers: Optional[List[TaskHeader]] = None
     input_mappings: Optional[List[VariableMapping]] = None
     output_mappings: Optional[List[VariableMapping]] = None
     boundary_events: Optional[List[BoundaryEvent]] = None
+    for_each: Optional[str] = None   # collection variable (FEEL expression)
+    as_var: Optional[str] = None     # loop element variable name
+    parallel: bool = False           # sequential (default) vs parallel
 
     def __post_init__(self):
         if self.retries is None:
@@ -188,13 +196,61 @@ class ServiceTask(Element):
 
 
 @dataclass
+class Subprocess(Element):
+    """Embedded subprocess that contains its own elements and flow.
+
+    A subprocess is both an element in the parent flow and a container
+    with its own start/end events, tasks, gateways, and sequence flows.
+    Boundary events can be attached to the subprocess as a whole (e.g.,
+    an error boundary that interrupts the entire subprocess).
+
+    Multi-instance fields (for_each, as_var, parallel) allow the
+    subprocess to iterate over a collection, executing the full
+    embedded flow once per item.
+    """
+    elements: Optional[List[Element]] = None
+    flows: Optional[List['Flow']] = None
+    boundary_events: Optional[List[BoundaryEvent]] = None
+    for_each: Optional[str] = None   # collection variable (FEEL expression)
+    as_var: Optional[str] = None     # loop element variable name
+    parallel: bool = False           # sequential (default) vs parallel
+
+    def __post_init__(self):
+        if self.elements is None:
+            self.elements = []
+        if self.flows is None:
+            self.flows = []
+        if self.boundary_events is None:
+            self.boundary_events = []
+
+
+@dataclass
+class CallActivity(Element):
+    """Call activity that invokes another process by its BPMN process ID.
+
+    Unlike an embedded subprocess, a call activity references a
+    separately-deployed process definition.  Input/output mappings
+    control variable propagation between the calling and called process.
+    """
+    process_id: str = ""
+    input_mappings: Optional[List[VariableMapping]] = None
+    output_mappings: Optional[List[VariableMapping]] = None
+
+    def __post_init__(self):
+        if self.input_mappings is None:
+            self.input_mappings = []
+        if self.output_mappings is None:
+            self.output_mappings = []
+
+
+@dataclass
 class ProcessEntity(Element):
     """Process entity element that translates to a serviceTask in Camunda.
-    
+
     This element must always be the first task after a start task and contains:
     - id: Element identifier (auto-generated from name in kebab-case)
     - entity_name: Name of the entity
-    
+
     The OpenAPI file path is automatically inferred from the process definition.
     """
     entity_name: str   # Name of the entity
