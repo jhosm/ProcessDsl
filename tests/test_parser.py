@@ -12,6 +12,7 @@ from bpm_dsl.ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, Gateway, Flow,
     TimerEvent, TimerDefinition, BoundaryTimerEvent, BoundaryErrorEvent,
     BoundaryMessageEvent, ReceiveMessageEvent, ServiceTask,
+    Subprocess, CallActivity,
 )
 
 
@@ -1169,6 +1170,332 @@ class TestBoundaryMessageEvent:
         assert isinstance(task.boundary_events[2], BoundaryMessageEvent)
         assert task.boundary_events[2].message == "cancel-request"
         assert task.boundary_events[2].correlation_key == "requestId"
+
+
+class TestSubprocessTransformer:
+    """Test subprocess AST transformer (pd-bc15d3bf)."""
+
+    def test_subprocess_with_child_elements_and_flow(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Order Processing" {
+                serviceTask "Validate" { type: "validate" }
+                serviceTask "Ship" { type: "ship" }
+                flow { "validate" -> "ship" }
+            }
+            end "E" {}
+            flow { "s" -> "order-processing" "order-processing" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        sub = p.elements[1]
+        assert isinstance(sub, Subprocess)
+        assert sub.name == "Order Processing"
+        assert sub.id == "order-processing"
+        assert len(sub.elements) == 2
+        assert isinstance(sub.elements[0], ServiceTask)
+        assert sub.elements[0].task_type == "validate"
+        assert isinstance(sub.elements[1], ServiceTask)
+        assert sub.elements[1].task_type == "ship"
+        assert len(sub.flows) == 1
+        assert sub.flows[0].source_id == "validate"
+        assert sub.flows[0].target_id == "ship"
+
+    def test_subprocess_with_explicit_id(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Work" { id: "my-sub" }
+            end "E" {}
+            flow { "s" -> "my-sub" "my-sub" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        sub = p.elements[1]
+        assert isinstance(sub, Subprocess)
+        assert sub.id == "my-sub"
+        assert sub.elements == []
+        assert sub.flows == []
+
+    def test_nested_subprocess(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Outer" {
+                subprocess "Inner" {
+                    serviceTask "Work" { type: "do" }
+                }
+            }
+            end "E" {}
+            flow { "s" -> "outer" "outer" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        outer = p.elements[1]
+        assert isinstance(outer, Subprocess)
+        assert outer.id == "outer"
+        assert len(outer.elements) == 1
+        inner = outer.elements[0]
+        assert isinstance(inner, Subprocess)
+        assert inner.id == "inner"
+        assert len(inner.elements) == 1
+        assert isinstance(inner.elements[0], ServiceTask)
+
+    def test_subprocess_with_boundary_events(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Risky" {
+                serviceTask "Call" { type: "api" }
+                onTimer "Timeout" { duration: 30m }
+                onError "Fail" { errorCode: "ERR" }
+            }
+            end "E" {}
+            flow { "s" -> "risky" "risky" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        sub = p.elements[1]
+        assert isinstance(sub, Subprocess)
+        assert len(sub.elements) == 1
+        assert len(sub.boundary_events) == 2
+        assert isinstance(sub.boundary_events[0], BoundaryTimerEvent)
+        assert sub.boundary_events[0].attached_to_ref == "risky"
+        assert isinstance(sub.boundary_events[1], BoundaryErrorEvent)
+        assert sub.boundary_events[1].attached_to_ref == "risky"
+
+    def test_subprocess_with_multi_instance(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Batch" {
+                forEach: "orders"
+                as: "order"
+                parallel: false
+                serviceTask "Process" { type: "proc" }
+            }
+            end "E" {}
+            flow { "s" -> "batch" "batch" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        sub = p.elements[1]
+        assert isinstance(sub, Subprocess)
+        assert sub.for_each == "orders"
+        assert sub.as_var == "order"
+        assert sub.parallel is False
+        assert len(sub.elements) == 1
+
+    def test_subprocess_empty_body(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Empty" {}
+            end "E" {}
+            flow { "s" -> "empty" "empty" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        sub = p.elements[1]
+        assert isinstance(sub, Subprocess)
+        assert sub.elements == []
+        assert sub.flows == []
+        assert sub.boundary_events == []
+
+
+class TestCallActivityTransformer:
+    """Test callActivity AST transformer (pd-bc15d3bf)."""
+
+    def test_call_activity_minimal(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" { processId: "other-process" }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        ca = p.elements[1]
+        assert isinstance(ca, CallActivity)
+        assert ca.name == "Invoke"
+        assert ca.id == "invoke"
+        assert ca.process_id == "other-process"
+        assert ca.input_mappings == []
+        assert ca.output_mappings == []
+
+    def test_call_activity_with_explicit_id(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                id: "call-sub"
+                processId: "sub-process"
+            }
+            end "E" {}
+            flow { "s" -> "call-sub" "call-sub" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        ca = p.elements[1]
+        assert ca.id == "call-sub"
+        assert ca.process_id == "sub-process"
+
+    def test_call_activity_with_mappings(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                processId: "sub-process"
+                inputMappings: ["a" -> "b", "c" -> "d"]
+                outputMappings: ["x" -> "y"]
+            }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        ca = p.elements[1]
+        assert len(ca.input_mappings) == 2
+        assert ca.input_mappings[0].source == "a"
+        assert ca.input_mappings[0].target == "b"
+        assert len(ca.output_mappings) == 1
+        assert ca.output_mappings[0].source == "x"
+
+    def test_call_activity_with_vars(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                processId: "sub"
+                inputVars: ["a", "b"]
+                outputVars: ["x"]
+            }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        ca = p.elements[1]
+        assert len(ca.input_mappings) == 2
+        assert ca.input_mappings[0].source == "a"
+        assert ca.input_mappings[0].target == "a"
+        assert len(ca.output_mappings) == 1
+
+
+class TestMultiInstanceTransformer:
+    """Test multi-instance (forEach/as/parallel) AST transformer (pd-bc15d3bf)."""
+
+    def test_service_task_foreach(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[1]
+        assert isinstance(task, ServiceTask)
+        assert task.for_each == "items"
+        assert task.as_var is None
+        assert task.parallel is False
+
+    def test_service_task_foreach_as_parallel(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+                as: "item"
+                parallel: true
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[1]
+        assert task.for_each == "items"
+        assert task.as_var == "item"
+        assert task.parallel is True
+
+    def test_service_task_foreach_defaults_sequential(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "records"
+                as: "record"
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[1]
+        assert task.for_each == "records"
+        assert task.as_var == "record"
+        assert task.parallel is False
+
+    def test_multi_instance_with_boundary_events(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+                as: "item"
+                onTimer "Timeout" { duration: 5m }
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[1]
+        assert task.for_each == "items"
+        assert task.as_var == "item"
+        assert len(task.boundary_events) == 1
+        assert isinstance(task.boundary_events[0], BoundaryTimerEvent)
+
+    def test_service_task_without_multi_instance(self):
+        """Verify existing service tasks still default to no multi-instance."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Simple" { type: "basic" }
+            end "E" {}
+            flow { "s" -> "simple" "simple" -> "e" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[1]
+        assert task.for_each is None
+        assert task.as_var is None
+        assert task.parallel is False
 
 
 class TestXorGatewayRejected:
