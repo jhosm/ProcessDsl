@@ -9,7 +9,7 @@ from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway,
     Flow, Element as BPMElement, TimerEvent, TimerDefinition,
     BoundaryTimerEvent, BoundaryErrorEvent, BoundaryMessageEvent,
-    ReceiveMessageEvent,
+    ReceiveMessageEvent, Subprocess, CallActivity,
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig, Bounds
 
@@ -60,7 +60,12 @@ class BPMNGenerator:
         """Collect unique message names from all message events, preserving first-seen order."""
         seen = set()
         names = []
-        for element in process.elements:
+        self._collect_message_names_recursive(process.elements, seen, names)
+        return names
+
+    def _collect_message_names_recursive(self, elements: List, seen: set, names: list) -> None:
+        """Recursively collect message names from elements, including inside subprocesses."""
+        for element in elements:
             msg = None
             if isinstance(element, StartEvent) and element.message:
                 msg = element.message
@@ -69,13 +74,35 @@ class BPMNGenerator:
             if msg and msg not in seen:
                 seen.add(msg)
                 names.append(msg)
-            # Check boundary events on service tasks
+            # Check boundary events on service tasks and subprocesses
+            boundary_events = []
             if isinstance(element, ServiceTask):
-                for be in element.boundary_events or []:
-                    if isinstance(be, BoundaryMessageEvent) and be.message and be.message not in seen:
-                        seen.add(be.message)
-                        names.append(be.message)
-        return names
+                boundary_events = element.boundary_events or []
+            elif isinstance(element, Subprocess):
+                boundary_events = element.boundary_events or []
+                self._collect_message_names_recursive(element.elements, seen, names)
+            for be in boundary_events:
+                if isinstance(be, BoundaryMessageEvent) and be.message and be.message not in seen:
+                    seen.add(be.message)
+                    names.append(be.message)
+
+    def _collect_error_definitions(self, definitions: Element, elements: List, seen: set) -> None:
+        """Recursively collect error definitions from boundary error events."""
+        for elem in elements:
+            boundary_events = []
+            if isinstance(elem, ServiceTask):
+                boundary_events = elem.boundary_events or []
+            elif isinstance(elem, Subprocess):
+                boundary_events = elem.boundary_events or []
+                self._collect_error_definitions(definitions, elem.elements, seen)
+            for be in boundary_events:
+                if isinstance(be, BoundaryErrorEvent) and be.error_code:
+                    if be.error_code not in seen:
+                        seen.add(be.error_code)
+                        error_def = SubElement(definitions, "error")
+                        error_def.set("id", f"error-{be.error_code}")
+                        error_def.set("name", be.error_code)
+                        error_def.set("errorCode", be.error_code)
 
     def generate(self, process: Process) -> str:
         """Generate BPMN XML from a Process AST."""
@@ -116,16 +143,7 @@ class BPMNGenerator:
 
         # Add error definitions for boundary error events (deduplicated by error code)
         seen_error_codes = set()
-        for elem in process.elements:
-            if isinstance(elem, ServiceTask):
-                for be in elem.boundary_events or []:
-                    if isinstance(be, BoundaryErrorEvent) and be.error_code:
-                        if be.error_code not in seen_error_codes:
-                            seen_error_codes.add(be.error_code)
-                            error_def = SubElement(definitions, "error")
-                            error_def.set("id", f"error-{be.error_code}")
-                            error_def.set("name", be.error_code)
-                            error_def.set("errorCode", be.error_code)
+        self._collect_error_definitions(definitions, process.elements, seen_error_codes)
         
         # Create process element
         bpmn_process = SubElement(definitions, "process")
@@ -168,6 +186,10 @@ class BPMNGenerator:
                 self._add_receive_message_event(parent, element)
             elif isinstance(element, TimerEvent):
                 self._add_timer_event(parent, element)
+            elif isinstance(element, Subprocess):
+                self._add_subprocess(parent, element)
+            elif isinstance(element, CallActivity):
+                self._add_call_activity(parent, element)
             elif isinstance(element, Gateway):
                 self._add_gateway(parent, element)
     
@@ -290,6 +312,10 @@ class BPMNGenerator:
                 output_param.set("source", self._ensure_feel_expression(mapping.source))  # Local variable (needs FEEL expression)
                 output_param.set("target", mapping.target)  # Process variable
 
+        # Add multi-instance loop characteristics
+        if service.for_each:
+            self._add_multi_instance(service_task, service.for_each, service.as_var, service.parallel)
+
         # Add boundary events as sibling elements with attachedToRef
         for be in service.boundary_events or []:
             if isinstance(be, BoundaryTimerEvent):
@@ -333,6 +359,73 @@ class BPMNGenerator:
         ext = SubElement(boundary, "extensionElements")
         subscription = SubElement(ext, "zeebe:subscription")
         subscription.set("correlationKey", self._ensure_feel_expression(be.correlation_key))
+
+    def _add_multi_instance(self, parent_element: Element, for_each: str, as_var: Optional[str], parallel: bool) -> None:
+        """Add multiInstanceLoopCharacteristics to a task or subprocess element.
+
+        Generates the BPMN standard element with Zeebe-specific extensions for
+        the collection (input) and element variable (output).
+        """
+        mi = SubElement(parent_element, "multiInstanceLoopCharacteristics")
+        if not parallel:
+            mi.set("isSequential", "true")
+        ext = SubElement(mi, "extensionElements")
+        loop_char = SubElement(ext, "zeebe:loopCharacteristics")
+        loop_char.set("inputCollection", self._ensure_feel_expression(for_each))
+        if as_var:
+            loop_char.set("inputElement", as_var)
+
+    def _add_subprocess(self, parent: Element, sub: 'Subprocess') -> None:
+        """Add an embedded subprocess with nested elements, flows, and optional multi-instance."""
+        sub_element = SubElement(parent, "subProcess")
+        sub_element.set("id", sub.id)
+        sub_element.set("name", sub.name)
+
+        # Add multi-instance if configured
+        if sub.for_each:
+            self._add_multi_instance(sub_element, sub.for_each, sub.as_var, sub.parallel)
+
+        # Recursively add child elements and flows inside the subprocess
+        self._add_elements(sub_element, sub.elements)
+        self._add_flows(sub_element, sub.flows)
+
+        # Add boundary events as sibling elements with attachedToRef
+        for be in sub.boundary_events or []:
+            if isinstance(be, BoundaryTimerEvent):
+                self._add_boundary_timer_event(parent, be, sub.id)
+            elif isinstance(be, BoundaryErrorEvent):
+                self._add_boundary_error_event(parent, be, sub.id)
+            elif isinstance(be, BoundaryMessageEvent):
+                self._add_boundary_message_event(parent, be, sub.id)
+
+    def _add_call_activity(self, parent: Element, call: CallActivity) -> None:
+        """Add a call activity element referencing an external process.
+
+        Generates bpmn:callActivity with zeebe:calledElement for the target
+        process ID and optional zeebe:ioMapping for variable propagation.
+        """
+        call_element = SubElement(parent, "callActivity")
+        call_element.set("id", call.id)
+        call_element.set("name", call.name)
+
+        extension_elements = SubElement(call_element, "extensionElements")
+
+        # Zeebe called element reference
+        called_element = SubElement(extension_elements, "zeebe:calledElement")
+        called_element.set("processId", call.process_id)
+        called_element.set("propagateAllChildVariables", "false")
+
+        # Add IO mappings if specified
+        if call.input_mappings or call.output_mappings:
+            io_mapping = SubElement(extension_elements, "zeebe:ioMapping")
+            for mapping in call.input_mappings:
+                inp = SubElement(io_mapping, "zeebe:input")
+                inp.set("source", self._ensure_feel_expression(mapping.source))
+                inp.set("target", mapping.target)
+            for mapping in call.output_mappings:
+                out = SubElement(io_mapping, "zeebe:output")
+                out.set("source", self._ensure_feel_expression(mapping.source))
+                out.set("target", mapping.target)
 
     def _add_process_entity(self, parent: Element, process_entity: ProcessEntity) -> None:
         """Add a process entity as a service task to the process.
@@ -547,10 +640,10 @@ class BPMNGenerator:
             bounds.set("width", str(int(pos.width)))
             bounds.set("height", str(int(pos.height)))
         
-        # Add shapes for boundary events (nested inside service tasks)
+        # Add shapes for boundary events (nested inside service tasks and subprocesses)
         for element in process.elements:
-            if isinstance(element, ServiceTask):
-                for be in element.boundary_events or []:
+            if isinstance(element, (ServiceTask, Subprocess)):
+                for be in getattr(element, 'boundary_events', None) or []:
                     if be.id not in element_positions:
                         continue
                     shape = SubElement(plane, "bpmndi:BPMNShape")
