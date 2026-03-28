@@ -53,8 +53,11 @@ class StartEvent(Element):
 
     When timer is set, this becomes a timer start event that triggers
     on a schedule (typically a cycle).
+    When message is set, this becomes a message start event that triggers
+    when the named message is published to Zeebe.
     """
     timer: Optional[TimerDefinition] = None
+    message: Optional[str] = None
 
 
 @dataclass
@@ -125,6 +128,17 @@ class BoundaryErrorEvent(BoundaryEvent):
 
 
 @dataclass
+class BoundaryMessageEvent(BoundaryEvent):
+    """Boundary message event (onMessage) attached to a service task.
+
+    Catches messages correlated to the running process instance while
+    the parent task is active.
+    """
+    message: str = ""
+    correlation_key: str = ""
+
+
+@dataclass
 class TimerEvent(Element):
     """Timer intermediate catch event.
 
@@ -136,6 +150,18 @@ class TimerEvent(Element):
     def __post_init__(self):
         if self.timer is None:
             self.timer = TimerDefinition()
+
+
+@dataclass
+class ReceiveMessageEvent(Element):
+    """Receive message intermediate catch event.
+
+    Pauses the process flow until a message with the given name is
+    published and correlated via the correlation key (a FEEL expression
+    referencing a process variable).
+    """
+    message: str = ""
+    correlation_key: str = ""
 
 
 @dataclass
