@@ -191,7 +191,9 @@ process "My Process" {
         headers: { "url": "https://api.example.com" }
     }
 
-    xorGateway "Check Result" {}
+    gateway "Check Result" {
+        type: xor
+    }
 
     end "Done" {}
 
@@ -200,8 +202,8 @@ process "My Process" {
         "load-data" -> "calculate"
         "calculate" -> "call-api"
         "call-api" -> "check-result"
-        "check-result" -> "done" when "result > 0"
-        "check-result" -> "begin" default
+        "check-result" -> "done" [when: "result > 0"]
+        "check-result" -> "begin" [otherwise]
     }
 }
 ```

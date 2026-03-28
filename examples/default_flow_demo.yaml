@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Default Flow Demo API
+  description: API specification for default flow demo process
+  version: 1.0.0
+
+components:
+  schemas:
+    StatusResult:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Status check result
+          example: "ok"
+
+paths:
+  /status:
+    get:
+      summary: Check status
+      responses:
+        '200':
+          description: Status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'

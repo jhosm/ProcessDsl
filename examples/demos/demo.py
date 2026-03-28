@@ -46,7 +46,8 @@ def demo_parser():
             resultVariable: "statusResult"
         }
         
-        xorGateway "Check Status" {
+        gateway "Check Status" {
+            type: xor
         }
         
         end "Success" {

@@ -18,7 +18,8 @@ O ProcessDsl suporta atualmente 6 tipos de elementos BPMN: StartEvent (plain), E
 | `end` | `<endEvent>` | — |
 | `scriptCall` | `<scriptTask>` | `<zeebe:script>`, `<zeebe:ioMapping>` |
 | `serviceTask` | `<serviceTask>` | `<zeebe:taskDefinition>`, `<zeebe:taskHeaders>`, `<zeebe:ioMapping>` |
-| `xorGateway` | `<exclusiveGateway>` | — |
+| `gateway { type: xor }` | `<exclusiveGateway>` | — |
+| `gateway { type: parallel }` | `<parallelGateway>` | — |
 | `processEntity` | `<serviceTask>` + gateway + error end (auto) | Vários |
 | flow | `<sequenceFlow>` | `<conditionExpression>` |
 

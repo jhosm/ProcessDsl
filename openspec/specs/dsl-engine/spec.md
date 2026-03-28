@@ -5,14 +5,14 @@ The DSL engine is the core Python pipeline that parses `.bpm` text files into an
 ## Requirements
 
 ### Requirement: DSL grammar supports BPM process definitions
-The system SHALL parse `.bpm` files containing process definitions with a name, optional id, and optional version. The grammar SHALL support six element types: `start`, `end`, `scriptCall`, `serviceTask`, `processEntity`, and `xorGateway`. Each element SHALL have a quoted display name and a block body with type-specific properties. A `flow` block SHALL define sequence flows between elements using `"source" -> "target"` syntax with optional `when` conditions and `default` markers.
+The system SHALL parse `.bpm` files containing process definitions with a name, optional id, and optional version. The grammar SHALL support element types: `start`, `end`, `scriptCall`, `serviceTask`, `processEntity`, `gateway`, and `timer`. Each element SHALL have a quoted display name and a block body with type-specific properties. The `gateway` element supports a `type` property (`xor` or `parallel`). A `flow` block SHALL define sequence flows between elements using `"source" -> "target"` syntax with optional `[when: "expression"]` conditions and `[otherwise]` markers.
 
 #### Scenario: Parse a minimal process
 - **WHEN** a `.bpm` file contains a process with a start, processEntity, and end element connected by flows
 - **THEN** the parser SHALL produce an AST with a Process node containing the declared elements and flows
 
 #### Scenario: Parse conditional flows
-- **WHEN** a flow uses `when "expression"` or `default` modifiers
+- **WHEN** a flow uses `[when: "expression"]` or `[otherwise]` modifiers
 - **THEN** the parser SHALL produce Flow nodes with the condition expression or is_default flag set accordingly
 
 ### Requirement: Element IDs are auto-generated in kebab-case

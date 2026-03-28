@@ -108,19 +108,22 @@ scriptCall "Task Name" {
 }
 ```
 
-#### XOR Gateway
+#### Gateway
 ```bpm
-xorGateway "Decision Name" {
+gateway "Decision Name" {
     id: "unique-id"
-    condition: "boolean_expression"
+    type: xor
 }
 ```
+
+Supported types: `xor` (exclusive) and `parallel`.
 
 ### Flows
 ```bpm
 flow {
     "source-id" -> "target-id"
-    "gateway-id" -> "task-id" [condition: "variable == value"]
+    "gateway-id" -> "task-id" [when: "variable == value"]
+    "gateway-id" -> "fallback-id" [otherwise]
 }
 ```
 
