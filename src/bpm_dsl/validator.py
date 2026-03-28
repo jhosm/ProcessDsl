@@ -10,6 +10,7 @@ from .ast_nodes import (
     Gateway, Flow, TimerEvent, TimerDefinition,
     BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
     BoundaryMessageEvent, ReceiveMessageEvent,
+    Subprocess, CallActivity,
 )
 
 
@@ -44,9 +45,12 @@ class ProcessValidator:
         errors.extend(self._validate_message_start_events(process))
         errors.extend(self._validate_boundary_events(process))
 
+        # Composition validation (subprocess, callActivity, multi-instance)
+        errors.extend(self._validate_composition(process))
+
         # Flow validation
         errors.extend(self._validate_flows(process))
-        
+
         # Structural validation
         errors.extend(self._validate_structure(process))
         
@@ -114,7 +118,9 @@ class ProcessValidator:
                 errors.extend(self._validate_receive_message(element))
             elif isinstance(element, Gateway):
                 errors.extend(self._validate_gateway(element))
-            # TimerEvent validated separately in _validate_timer_events
+            elif isinstance(element, CallActivity):
+                errors.extend(self._validate_call_activity(element))
+            # Subprocess and TimerEvent validated separately
 
         # Check for required start and end events
         if not start_events:
@@ -363,6 +369,107 @@ class ProcessValidator:
             r'R\d*/P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?',
             value,
         ))
+
+    def _validate_call_activity(self, ca: 'CallActivity') -> List[str]:
+        """Validate callActivity element."""
+        errors = []
+        if not ca.process_id or not ca.process_id.strip():
+            errors.append(
+                f"Call activity '{ca.id}' must have a non-empty processId"
+            )
+        return errors
+
+    def _validate_multi_instance(self, element: 'Element') -> List[str]:
+        """Validate multi-instance (forEach) configuration on an element."""
+        errors = []
+        for_each = getattr(element, 'for_each', None)
+        as_var = getattr(element, 'as_var', None)
+
+        if for_each and not as_var:
+            errors.append(
+                f"Element '{element.id}' has forEach but is missing "
+                f"the required 'as' variable"
+            )
+        return errors
+
+    def _validate_subprocess_internal(self, sub: 'Subprocess', all_ids: Set[str]) -> List[str]:
+        """Recursively validate subprocess internal structure."""
+        errors = []
+
+        if not sub.elements:
+            errors.append(f"Subprocess '{sub.id}' must contain at least one element")
+            return errors
+
+        start_events = [e for e in sub.elements if isinstance(e, StartEvent)]
+        end_events = [e for e in sub.elements if isinstance(e, EndEvent)]
+
+        if not start_events:
+            errors.append(f"Subprocess '{sub.id}' must have at least one start event")
+        if not end_events:
+            errors.append(f"Subprocess '{sub.id}' must have at least one end event")
+
+        for child in sub.elements:
+            # ID uniqueness across subprocess boundaries
+            if child.id in all_ids:
+                errors.append(
+                    f"Duplicate element ID '{child.id}' "
+                    f"(conflicts across subprocess boundary in '{sub.id}')"
+                )
+            all_ids.add(child.id)
+
+            # Validate child element ID format
+            if not self._is_valid_xml_id(child.id):
+                errors.append(
+                    f"Element ID '{child.id}' in subprocess '{sub.id}' "
+                    f"is not a valid XML identifier"
+                )
+
+            # Validate specific child element types
+            if isinstance(child, ScriptCall):
+                errors.extend(self._validate_script_call(child))
+            elif isinstance(child, ServiceTask):
+                errors.extend(self._validate_service_task(child))
+                errors.extend(self._validate_multi_instance(child))
+            elif isinstance(child, CallActivity):
+                errors.extend(self._validate_call_activity(child))
+            elif isinstance(child, Gateway):
+                errors.extend(self._validate_gateway(child))
+            elif isinstance(child, ReceiveMessageEvent):
+                errors.extend(self._validate_receive_message(child))
+            elif isinstance(child, Subprocess):
+                errors.extend(self._validate_multi_instance(child))
+                errors.extend(self._validate_subprocess_internal(child, all_ids))
+
+        # Validate internal flows reference existing child element IDs
+        child_ids = {e.id for e in sub.elements}
+        for flow in sub.flows or []:
+            if flow.source_id not in child_ids:
+                errors.append(
+                    f"Flow in subprocess '{sub.id}' references "
+                    f"non-existent source element: {flow.source_id}"
+                )
+            if flow.target_id not in child_ids:
+                errors.append(
+                    f"Flow in subprocess '{sub.id}' references "
+                    f"non-existent target element: {flow.target_id}"
+                )
+
+        return errors
+
+    def _validate_composition(self, process: Process) -> List[str]:
+        """Validate composition elements: subprocess, callActivity, multi-instance."""
+        errors = []
+        # Collect all top-level element IDs for cross-boundary uniqueness
+        all_ids: Set[str] = {e.id for e in process.elements}
+
+        for element in process.elements:
+            if isinstance(element, Subprocess):
+                errors.extend(self._validate_multi_instance(element))
+                errors.extend(self._validate_subprocess_internal(element, all_ids))
+            elif isinstance(element, ServiceTask):
+                errors.extend(self._validate_multi_instance(element))
+
+        return errors
 
     def _validate_flows(self, process: Process) -> List[str]:
         """Validate sequence flows."""
