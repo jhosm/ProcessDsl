@@ -27,13 +27,13 @@ script_properties = "id:" STRING
                    ("outputVars:" string_array)?
                    ("resultVariable:" STRING)?
 
-xor_gateway = "xorGateway" STRING "{" gateway_properties "}"
-gateway_properties = "id:" STRING
-                    ("condition:" STRING)?
+gateway = "gateway" STRING "{" gateway_properties "}"
+gateway_properties = ("id:" STRING)? ("type:" GATEWAY_TYPE)? ("when:" STRING)?
+GATEWAY_TYPE = "xor" | "parallel"
 
 flow_section = "flow" "{" flow_definition* "}"
-flow_definition = STRING "->" STRING ("[" flow_condition "]")?
-flow_condition = "condition:" STRING
+flow_definition = STRING "->" STRING flow_condition?
+flow_condition = "[" "when:" STRING "]" | "[" "otherwise" "]"
 
 string_array = "[" (STRING ("," STRING)*)? "]"
 STRING = '"' [^"]* '"'
@@ -67,19 +67,20 @@ STRING = '"' [^"]* '"'
   - `resultVariable`: Optional. Variable name to store the script result (defaults to "result")
 - **BPMN Mapping**: `<bpmn:scriptTask>` with Zeebe script job type
 
-### 4. XOR Gateway
-- **Syntax**: 
+### 4. Gateway
+- **Syntax**:
   ```
-  xorGateway "Gateway Name" {
+  gateway "Gateway Name" {
       id: "unique-id"
-      condition: "boolean_expression"
+      type: xor
   }
   ```
-- **Purpose**: Exclusive decision point in the process
-- **BPMN Mapping**: `<bpmn:exclusiveGateway>`
+- **Purpose**: Decision or fork/join point in the process
+- **Types**: `xor` (exclusive gateway), `parallel` (parallel gateway)
+- **BPMN Mapping**: `<bpmn:exclusiveGateway>` (xor) or `<bpmn:parallelGateway>` (parallel)
 
 ## Flow Definitions
-- **Syntax**: `"source-id" -> "target-id" [condition: "expression"]`
+- **Syntax**: `"source-id" -> "target-id" [when: "expression"]` or `"source-id" -> "target-id" [otherwise]`
 - **Purpose**: Defines sequence flows between elements
 - **BPMN Mapping**: `<bpmn:sequenceFlow>`
 

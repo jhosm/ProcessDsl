@@ -1,0 +1,27 @@
+process "Default Flow Demo" {
+    id: "default-flow-demo"
+    version: "1.0"
+
+    start "Start" {
+        id: "start-1"
+    }
+
+    gateway "Check Status" {
+        id: "gateway-1"
+        type: xor
+    }
+
+    end "Success" {
+        id: "end-success"
+    }
+
+    end "Fallback" {
+        id: "end-fallback"
+    }
+
+    flow {
+        "start-1" -> "gateway-1"
+        "gateway-1" -> "end-success" [when: "status == ok"]
+        "gateway-1" -> "end-fallback" [otherwise]
+    }
+}

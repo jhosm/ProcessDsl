@@ -73,7 +73,7 @@ def demo_simple_process():
 
 
 def demo_gateway_process():
-    """Demo a process with XOR gateway and branches."""
+    """Demo a process with gateway branches."""
     print("\n=== Demo 2: Process with Gateway Branches ===")
     
     dsl_content = '''
@@ -92,8 +92,9 @@ def demo_gateway_process():
             outputVars: ["needsApproval"]
         }
         
-        xorGateway "Approval Required?" {
+        gateway "Approval Required?" {
             id: "approval-gateway"
+            type: xor
         }
         
         scriptCall "Auto Approve" {
@@ -115,8 +116,9 @@ def demo_gateway_process():
             outputVars: ["status"]
         }
         
-        xorGateway "Merge Results" {
+        gateway "Merge Results" {
             id: "merge-gateway"
+            type: xor
         }
         
         end "Process Complete" {
@@ -180,8 +182,9 @@ def demo_custom_layout_config():
             outputVars: ["isValid"]
         }
         
-        xorGateway "Valid Document?" {
+        gateway "Valid Document?" {
             id: "valid-gateway"
+            type: xor
         }
         
         scriptCall "Reject Document" {

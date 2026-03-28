@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Demo script for default flow functionality in BPM DSL.
-Shows how to use default flows with XOR gateways.
+Demo script for otherwise flow functionality in BPM DSL.
+Shows how to use otherwise flows with gateways.
 """
 
 import sys
@@ -69,7 +69,7 @@ def main():
         
         # Check for default flow attribute in gateway
         if 'default=' in bpmn_xml:
-            print("✅ Default flow attribute found in XOR gateway")
+            print("✅ Default flow attribute found in gateway")
         else:
             print("❌ Default flow attribute not found")
             
