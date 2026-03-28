@@ -12,6 +12,7 @@ from .ast_nodes import (
     Flow, Element, ASTNode, VariableMapping, TaskHeader,
     TimerDefinition, TimerEvent, BoundaryTimerEvent, BoundaryErrorEvent,
     BoundaryMessageEvent, BoundaryEvent, ReceiveMessageEvent,
+    Subprocess, CallActivity,
 )
 
 
@@ -215,6 +216,9 @@ class BPMTransformer(Transformer):
             input_mappings=properties.get('input_mappings', []),
             output_mappings=properties.get('output_mappings', []),
             boundary_events=boundary_events,
+            for_each=properties.get('for_each'),
+            as_var=properties.get('as_var'),
+            parallel=properties.get('parallel', False),
         )
         # Back-link each boundary event to this parent task
         for be in task.boundary_events:
@@ -522,6 +526,98 @@ class BPMTransformer(Transformer):
     def boundary_event(self, items):
         """Pass through the boundary event node."""
         return items[0]
+
+    # ── Multi-instance transformers ────────────────────────────────
+
+    @v_args(inline=True)
+    def for_each(self, collection: str) -> dict:
+        """Extract forEach collection variable."""
+        return {'for_each': collection}
+
+    @v_args(inline=True)
+    def for_each_as(self, var: str) -> dict:
+        """Extract the loop element variable name."""
+        return {'as_var': var}
+
+    @v_args(inline=True)
+    def for_each_parallel(self, value: bool) -> dict:
+        """Extract the parallel flag."""
+        return {'parallel': value}
+
+    def multi_instance(self, items) -> dict:
+        """Collect multi-instance modifier properties (forEach/as/parallel)."""
+        return self._extract_properties(items)
+
+    # ── Subprocess transformers ────────────────────────────────────
+
+    def subprocess_properties(self, items) -> dict:
+        """Collect subprocess properties: id, multi-instance, child elements, flow, boundary events."""
+        properties = {}
+        elements = []
+        boundary_events = []
+        for item in items:
+            if isinstance(item, BoundaryEvent):
+                boundary_events.append(item)
+            elif isinstance(item, Element):
+                elements.append(item)
+            elif isinstance(item, dict):
+                properties.update(item)
+        if elements:
+            properties['elements'] = elements
+        if boundary_events:
+            properties['boundary_events'] = boundary_events
+        return properties
+
+    @v_args(inline=True)
+    def subprocess(self, name: str, properties: dict) -> Subprocess:
+        """Create a Subprocess node with child elements and internal flow.
+
+        Boundary events get their ``attached_to_ref`` patched to point back
+        to this subprocess, mirroring the pattern used in ``service_task``.
+        """
+        element_id = properties.get('id', to_kebab_case(name))
+        boundary_events = properties.get('boundary_events', [])
+        sub = Subprocess(
+            name=name,
+            id=element_id,
+            elements=properties.get('elements', []),
+            flows=properties.get('flows', []),
+            boundary_events=boundary_events,
+            for_each=properties.get('for_each'),
+            as_var=properties.get('as_var'),
+            parallel=properties.get('parallel', False),
+        )
+        for be in sub.boundary_events:
+            be.attached_to_ref = element_id
+        return sub
+
+    # ── Call Activity transformers ─────────────────────────────────
+
+    @v_args(inline=True)
+    def process_ref(self, ref: str) -> dict:
+        """Extract processId reference."""
+        return {'process_id': ref}
+
+    @v_args(inline=True)
+    def propagate_all_variables(self, value: bool) -> dict:
+        """Extract propagateAllVariables flag."""
+        return {'propagate_all_variables': value}
+
+    def call_activity_properties(self, items) -> dict:
+        """Collect callActivity properties."""
+        return self._extract_properties(items)
+
+    @v_args(inline=True)
+    def call_activity(self, name: str, properties: dict) -> CallActivity:
+        """Create a CallActivity node."""
+        element_id = properties.get('id', to_kebab_case(name))
+        return CallActivity(
+            name=name,
+            id=element_id,
+            process_id=properties.get('process_id', ''),
+            input_mappings=properties.get('input_mappings', []),
+            output_mappings=properties.get('output_mappings', []),
+        )
 
     def flow_section(self, items) -> dict:
         """Create flow section."""
