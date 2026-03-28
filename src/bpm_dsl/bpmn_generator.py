@@ -8,7 +8,8 @@ from xml.dom import minidom
 from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway,
     Flow, Element as BPMElement, TimerEvent, TimerDefinition,
-    BoundaryTimerEvent, BoundaryErrorEvent,
+    BoundaryTimerEvent, BoundaryErrorEvent, BoundaryMessageEvent,
+    ReceiveMessageEvent,
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig, Bounds
 
@@ -55,6 +56,27 @@ class BPMNGenerator:
         
         return f'={feel_expression}'
     
+    def _collect_message_names(self, process: Process) -> List[str]:
+        """Collect unique message names from all message events, preserving first-seen order."""
+        seen = set()
+        names = []
+        for element in process.elements:
+            msg = None
+            if isinstance(element, StartEvent) and element.message:
+                msg = element.message
+            elif isinstance(element, ReceiveMessageEvent) and element.message:
+                msg = element.message
+            if msg and msg not in seen:
+                seen.add(msg)
+                names.append(msg)
+            # Check boundary events on service tasks
+            if isinstance(element, ServiceTask):
+                for be in element.boundary_events or []:
+                    if isinstance(be, BoundaryMessageEvent) and be.message and be.message not in seen:
+                        seen.add(be.message)
+                        names.append(be.message)
+        return names
+
     def generate(self, process: Process) -> str:
         """Generate BPMN XML from a Process AST."""
         # Clear gateway elements for fresh generation
@@ -78,6 +100,12 @@ class BPMNGenerator:
             if prefix != 'bpmn':
                 definitions.set(f"xmlns:{prefix}", uri)
         
+        # Add deduplicated bpmn:message definitions for all message events
+        for msg_name in self._collect_message_names(process):
+            msg_def = SubElement(definitions, "message")
+            msg_def.set("id", f"message-{msg_name}")
+            msg_def.set("name", msg_name)
+
         # Add error definitions if processEntity elements exist
         has_process_entity = any(isinstance(elem, ProcessEntity) for elem in process.elements)
         if has_process_entity:
@@ -136,6 +164,8 @@ class BPMNGenerator:
                 self._add_service_task(parent, element)
             elif isinstance(element, ProcessEntity):
                 self._add_process_entity(parent, element)
+            elif isinstance(element, ReceiveMessageEvent):
+                self._add_receive_message_event(parent, element)
             elif isinstance(element, TimerEvent):
                 self._add_timer_event(parent, element)
             elif isinstance(element, Gateway):
@@ -161,6 +191,9 @@ class BPMNGenerator:
         start_event.set("name", start.name)
         if start.timer:
             self._add_timer_event_definition(start_event, start.timer)
+        if start.message:
+            msg_event_def = SubElement(start_event, "messageEventDefinition")
+            msg_event_def.set("messageRef", f"message-{start.message}")
     
     def _add_timer_event(self, parent: Element, timer_event: TimerEvent) -> None:
         """Add a timer intermediate catch event to the process."""
@@ -169,6 +202,17 @@ class BPMNGenerator:
         ice.set("name", timer_event.name)
         if timer_event.timer:
             self._add_timer_event_definition(ice, timer_event.timer)
+
+    def _add_receive_message_event(self, parent: Element, event: ReceiveMessageEvent) -> None:
+        """Add a receive message intermediate catch event to the process."""
+        ice = SubElement(parent, "intermediateCatchEvent")
+        ice.set("id", event.id)
+        ice.set("name", event.name)
+        msg_event_def = SubElement(ice, "messageEventDefinition")
+        msg_event_def.set("messageRef", f"message-{event.message}")
+        ext = SubElement(ice, "extensionElements")
+        subscription = SubElement(ext, "zeebe:subscription")
+        subscription.set("correlationKey", self._ensure_feel_expression(event.correlation_key))
 
     def _add_end_event(self, parent: Element, end: EndEvent) -> None:
         """Add an end event to the process."""
@@ -252,6 +296,8 @@ class BPMNGenerator:
                 self._add_boundary_timer_event(parent, be, service.id)
             elif isinstance(be, BoundaryErrorEvent):
                 self._add_boundary_error_event(parent, be, service.id)
+            elif isinstance(be, BoundaryMessageEvent):
+                self._add_boundary_message_event(parent, be, service.id)
 
     def _add_boundary_timer_event(self, parent: Element, be: BoundaryTimerEvent, attached_to: str) -> None:
         """Add a boundary timer event element."""
@@ -274,6 +320,19 @@ class BPMNGenerator:
         if be.error_code:
             error_event_def = SubElement(boundary, "errorEventDefinition")
             error_event_def.set("errorRef", f"error-{be.error_code}")
+
+    def _add_boundary_message_event(self, parent: Element, be: BoundaryMessageEvent, attached_to: str) -> None:
+        """Add a boundary message event element."""
+        boundary = SubElement(parent, "boundaryEvent")
+        boundary.set("id", be.id)
+        boundary.set("name", be.name)
+        boundary.set("attachedToRef", attached_to)
+        boundary.set("cancelActivity", "true" if be.interrupting else "false")
+        msg_event_def = SubElement(boundary, "messageEventDefinition")
+        msg_event_def.set("messageRef", f"message-{be.message}")
+        ext = SubElement(boundary, "extensionElements")
+        subscription = SubElement(ext, "zeebe:subscription")
+        subscription.set("correlationKey", self._ensure_feel_expression(be.correlation_key))
 
     def _add_process_entity(self, parent: Element, process_entity: ProcessEntity) -> None:
         """Add a process entity as a service task to the process.
