@@ -702,6 +702,259 @@ class TestGateway:
         assert gw.gateway_type == "xor"  # default
 
 
+class TestSubprocessGrammar:
+    """Test subprocess grammar rules parse correctly at the Lark level.
+
+    These tests verify grammar acceptance only — AST transformer support
+    is tracked in pd-bc15d3bf.
+    """
+
+    @pytest.fixture
+    def grammar_parser(self):
+        """Create a raw Lark parser (no transformer) for grammar-level tests."""
+        from lark import Lark
+        grammar_path = Path(__file__).parent.parent / "src" / "bpm_dsl" / "grammar.lark"
+        return Lark(grammar_path.read_text(), parser="lalr")
+
+    def test_subprocess_with_child_elements_and_flow(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Order Processing" {
+                serviceTask "Validate" { type: "validate" }
+                serviceTask "Ship" { type: "ship" }
+                flow { "validate" -> "ship" }
+            }
+            end "E" {}
+            flow { "s" -> "order-processing" "order-processing" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_subprocess_with_explicit_id(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Work" { id: "my-sub" }
+            end "E" {}
+            flow { "s" -> "my-sub" "my-sub" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_nested_subprocess(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Outer" {
+                subprocess "Inner" {
+                    serviceTask "Work" { type: "do" }
+                }
+            }
+            end "E" {}
+            flow { "s" -> "outer" "outer" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_subprocess_with_boundary_events(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Risky" {
+                serviceTask "Call" { type: "api" }
+                onTimer "Timeout" { duration: 30m }
+                onError "Fail" { errorCode: "ERR" }
+            }
+            end "E" {}
+            flow { "s" -> "risky" "risky" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_subprocess_empty_body(self, grammar_parser):
+        """Subprocess with no child elements or flow."""
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Empty" {}
+            end "E" {}
+            flow { "s" -> "empty" "empty" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+
+class TestCallActivityGrammar:
+    """Test callActivity grammar rules."""
+
+    @pytest.fixture
+    def grammar_parser(self):
+        from lark import Lark
+        grammar_path = Path(__file__).parent.parent / "src" / "bpm_dsl" / "grammar.lark"
+        return Lark(grammar_path.read_text(), parser="lalr")
+
+    def test_call_activity_minimal(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" { processId: "other-process" }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_call_activity_with_propagate(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                processId: "sub"
+                propagateAllVariables: true
+            }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_call_activity_with_mappings(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                id: "call-sub"
+                processId: "sub-process"
+                propagateAllVariables: false
+                inputMappings: ["a" -> "b", "c" -> "d"]
+                outputMappings: ["x" -> "y"]
+            }
+            end "E" {}
+            flow { "s" -> "call-sub" "call-sub" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_call_activity_with_vars(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                processId: "sub"
+                inputVars: ["a", "b"]
+                outputVars: ["x"]
+            }
+            end "E" {}
+            flow { "s" -> "invoke" "invoke" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+
+class TestMultiInstanceGrammar:
+    """Test forEach/as/parallel multi-instance grammar rules."""
+
+    @pytest.fixture
+    def grammar_parser(self):
+        from lark import Lark
+        grammar_path = Path(__file__).parent.parent / "src" / "bpm_dsl" / "grammar.lark"
+        return Lark(grammar_path.read_text(), parser="lalr")
+
+    def test_service_task_foreach(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_service_task_foreach_as_parallel(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+                as: "item"
+                parallel: true
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_subprocess_with_multi_instance(self, grammar_parser):
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Batch" {
+                forEach: "orders"
+                as: "order"
+                parallel: false
+                serviceTask "Process" { type: "proc" }
+            }
+            end "E" {}
+            flow { "s" -> "batch" "batch" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_multi_instance_with_boundary_events(self, grammar_parser):
+        """Multi-instance serviceTask with boundary events."""
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "items"
+                as: "item"
+                onTimer "Timeout" { duration: 5m }
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+    def test_sequential_multi_instance(self, grammar_parser):
+        """forEach without parallel defaults to sequential."""
+        tree = grammar_parser.parse('''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Each" {
+                type: "process"
+                forEach: "records"
+                as: "record"
+            }
+            end "E" {}
+            flow { "s" -> "each" "each" -> "e" }
+        }
+        ''')
+        assert tree.data == "process"
+
+
 class TestXorGatewayRejected:
     """Test that the legacy xorGateway keyword is rejected by the parser."""
 

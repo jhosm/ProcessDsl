@@ -20,6 +20,8 @@ element: start_element
        | gateway
        | timer_element
        | receive_message
+       | subprocess
+       | call_activity
 
 // Task 1.4: Extend start element with optional timer or message property
 start_element: "start" STRING "{" start_properties "}"
@@ -35,8 +37,9 @@ script_call: "scriptCall" STRING "{" script_properties "}"
 script_properties: element_id? script_code? (input_mappings | input_vars)? (output_mappings | output_vars)? result_variable?
 
 // Task 1.5: Add onTimer/onError as optional nested children in serviceTask
+// Multi-instance modifiers (forEach/as/parallel) added for composition support
 service_task: "serviceTask" STRING "{" service_properties "}"
-service_properties: element_id? task_type? task_retries? task_headers? (input_mappings | input_vars)? (output_mappings | output_vars)? boundary_event*
+service_properties: element_id? task_type? task_retries? task_headers? (input_mappings | input_vars)? (output_mappings | output_vars)? multi_instance? boundary_event*
 
 process_entity: "processEntity" STRING "{" process_entity_properties "}"
 process_entity_properties: entity_name?
@@ -65,7 +68,24 @@ cycle_expr: "cycle(" duration_value ")"
 // Task 1.2: Duration value — either an ISO 8601 string or shorthand tokens
 duration_value: STRING | DURATION_SHORTHAND
 
-// Task 1.5: Boundary event rules (nested inside serviceTask)
+// Subprocess: recursive container with child elements and flow
+subprocess: "subprocess" STRING "{" subprocess_properties "}"
+subprocess_properties: element_id? multi_instance? element* flow_section? boundary_event*
+
+// Call Activity: inter-process invocation
+call_activity: "callActivity" STRING "{" call_activity_properties "}"
+call_activity_properties: element_id? process_ref propagate_all_variables? (input_mappings | input_vars)? (output_mappings | output_vars)?
+
+process_ref: "processId:" STRING
+propagate_all_variables: "propagateAllVariables:" BOOLEAN
+
+// Multi-instance loop characteristics (forEach/as/parallel)
+multi_instance: for_each for_each_as? for_each_parallel?
+for_each: "forEach:" STRING
+for_each_as: "as:" STRING
+for_each_parallel: "parallel:" BOOLEAN
+
+// Task 1.5: Boundary event rules (nested inside serviceTask and subprocess)
 boundary_event: on_timer | on_error | on_message
 
 on_timer: "onTimer" STRING "{" on_timer_properties "}"
