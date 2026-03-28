@@ -123,7 +123,7 @@ class BPMNGenerator:
             elif isinstance(element, ProcessEntity):
                 self._add_process_entity(parent, element)
             elif isinstance(element, Gateway):
-                self._add_xor_gateway(parent, element)
+                self._add_gateway(parent, element)
     
     def _add_start_event(self, parent: Element, start: StartEvent) -> None:
         """Add a start event to the process."""
@@ -286,14 +286,22 @@ class BPMNGenerator:
             'error_end_id': error_end_id
         })
     
-    def _add_xor_gateway(self, parent: Element, gateway: Gateway) -> None:
-        """Add an exclusive gateway to the process."""
-        xor_gateway = SubElement(parent, "exclusiveGateway")
-        xor_gateway.set("id", gateway.id)
-        xor_gateway.set("name", gateway.name)
-        
-        # Store reference for setting default flow later
-        self._gateway_elements[gateway.id] = xor_gateway
+    def _add_gateway(self, parent: Element, gateway: Gateway) -> None:
+        """Add a gateway element to the process.
+
+        Emits exclusiveGateway for xor type and parallelGateway for parallel type.
+        Only exclusive gateways support the default-flow attribute (otherwise semantics).
+        """
+        if gateway.gateway_type == "parallel":
+            gw_element = SubElement(parent, "parallelGateway")
+        else:
+            gw_element = SubElement(parent, "exclusiveGateway")
+        gw_element.set("id", gateway.id)
+        gw_element.set("name", gateway.name)
+
+        # Only exclusive gateways support the default flow attribute
+        if gateway.gateway_type != "parallel":
+            self._gateway_elements[gateway.id] = gw_element
     
     def _add_flows(self, parent: Element, flows: List[Flow]) -> None:
         """Add sequence flows to the process, handling processEntity validation flows automatically."""
