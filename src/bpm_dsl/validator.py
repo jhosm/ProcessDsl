@@ -9,6 +9,7 @@ from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
     Gateway, Flow, TimerEvent, TimerDefinition,
     BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
+    BoundaryMessageEvent, ReceiveMessageEvent,
 )
 
 
@@ -38,8 +39,9 @@ class ProcessValidator:
         # Element validation
         errors.extend(self._validate_elements(process))
 
-        # Timer and boundary event validation
+        # Timer, message, and boundary event validation
         errors.extend(self._validate_timer_events(process))
+        errors.extend(self._validate_message_start_events(process))
         errors.extend(self._validate_boundary_events(process))
 
         # Flow validation
@@ -108,6 +110,8 @@ class ProcessValidator:
                 errors.extend(self._validate_service_task(element))
             elif isinstance(element, ProcessEntity):
                 errors.extend(self._validate_process_entity(element))
+            elif isinstance(element, ReceiveMessageEvent):
+                errors.extend(self._validate_receive_message(element))
             elif isinstance(element, Gateway):
                 errors.extend(self._validate_gateway(element))
             # TimerEvent validated separately in _validate_timer_events
@@ -186,6 +190,22 @@ class ProcessValidator:
         
         return errors
     
+    def _validate_receive_message(self, event: ReceiveMessageEvent) -> List[str]:
+        """Validate receiveMessage intermediate catch event."""
+        errors = []
+
+        if not event.message or not event.message.strip():
+            errors.append(
+                f"Receive message event '{event.id}' must have a non-empty message name"
+            )
+
+        if not event.correlation_key or not event.correlation_key.strip():
+            errors.append(
+                f"Receive message event '{event.id}' must have a non-empty correlationKey"
+            )
+
+        return errors
+
     def _validate_gateway(self, gateway: Gateway) -> List[str]:
         """Validate gateway element."""
         errors = []
@@ -223,6 +243,19 @@ class ProcessValidator:
                     )
                 else:
                     errors.extend(self._validate_timer_definition(td, element.id))
+
+        return errors
+
+    def _validate_message_start_events(self, process: Process) -> List[str]:
+        """Validate message start events have a non-empty message name."""
+        errors = []
+
+        for element in process.elements:
+            if isinstance(element, StartEvent) and element.message is not None:
+                if not element.message or not element.message.strip():
+                    errors.append(
+                        f"Message start event '{element.id}' must have a non-empty message name"
+                    )
 
         return errors
 
@@ -296,6 +329,13 @@ class ProcessValidator:
                     if not be.error_code:
                         errors.append(
                             f"Boundary error event '{be.id}' must specify an errorCode"
+                        )
+
+                # BoundaryMessageEvent must have a correlationKey
+                if isinstance(be, BoundaryMessageEvent):
+                    if not be.correlation_key or not be.correlation_key.strip():
+                        errors.append(
+                            f"Boundary message event '{be.id}' must specify a correlationKey"
                         )
 
         return errors
