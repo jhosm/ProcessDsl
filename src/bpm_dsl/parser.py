@@ -11,7 +11,7 @@ from .ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway,
     Flow, Element, ASTNode, VariableMapping, TaskHeader,
     TimerDefinition, TimerEvent, BoundaryTimerEvent, BoundaryErrorEvent,
-    BoundaryEvent,
+    BoundaryMessageEvent, BoundaryEvent, ReceiveMessageEvent,
 )
 
 
@@ -172,7 +172,8 @@ class BPMTransformer(Transformer):
         """Create a StartEvent node."""
         element_id = properties.get('id', to_kebab_case(name))
         timer = properties.get('timer')
-        return StartEvent(name=name, id=element_id, timer=timer)
+        message = properties.get('message')
+        return StartEvent(name=name, id=element_id, timer=timer, message=message)
     
     @v_args(inline=True)
     def end_element(self, name: str, properties: dict) -> EndEvent:
@@ -420,6 +421,11 @@ class BPMTransformer(Transformer):
         """Extract timer for a start event (always a cycle)."""
         return {'timer': TimerDefinition(cycle=cycle)}
 
+    @v_args(inline=True)
+    def start_message(self, message: str) -> dict:
+        """Extract message name for a message start event."""
+        return {'message': message}
+
     # ── Boundary event transformers ──────────────────────────────────
 
     @v_args(inline=True)
@@ -464,6 +470,53 @@ class BPMTransformer(Transformer):
             id=element_id,
             interrupting=properties.get('interrupting', True),
             error_code=properties.get('error_code'),
+        )
+
+    # ── Message event transformers ──────────────────────────────────
+
+    @v_args(inline=True)
+    def message_name(self, name: str) -> dict:
+        """Extract message name property."""
+        return {'message': name}
+
+    @v_args(inline=True)
+    def correlation_key(self, key: str) -> dict:
+        """Extract correlation key property."""
+        return {'correlation_key': key}
+
+    def receive_message_properties(self, items) -> dict:
+        """Collect receiveMessage element properties."""
+        return self._extract_properties(items)
+
+    @v_args(inline=True)
+    def receive_message(self, name: str, properties: dict) -> ReceiveMessageEvent:
+        """Create a ReceiveMessageEvent node."""
+        element_id = properties.get('id', to_kebab_case(name))
+        return ReceiveMessageEvent(
+            name=name,
+            id=element_id,
+            message=properties.get('message', ''),
+            correlation_key=properties.get('correlation_key', ''),
+        )
+
+    def on_message_properties(self, items) -> dict:
+        """Collect onMessage boundary event properties."""
+        return self._extract_properties(items)
+
+    @v_args(inline=True)
+    def on_message(self, name: str, properties: dict) -> BoundaryMessageEvent:
+        """Create a BoundaryMessageEvent node.
+
+        ``attached_to_ref`` is set later by the parent ``service_task``
+        transformer once it knows its own ID.
+        """
+        element_id = to_kebab_case(name)
+        return BoundaryMessageEvent(
+            name=name,
+            id=element_id,
+            interrupting=properties.get('interrupting', True),
+            message=properties.get('message', ''),
+            correlation_key=properties.get('correlation_key', ''),
         )
 
     def boundary_event(self, items):
