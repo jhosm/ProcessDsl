@@ -11,7 +11,7 @@ from bpm_dsl.parser import BPMParser, parse_bpm_string, desugar_duration
 from bpm_dsl.ast_nodes import (
     Process, StartEvent, EndEvent, ScriptCall, Gateway, Flow,
     TimerEvent, TimerDefinition, BoundaryTimerEvent, BoundaryErrorEvent,
-    ServiceTask,
+    BoundaryMessageEvent, ReceiveMessageEvent, ServiceTask,
 )
 
 
@@ -953,6 +953,222 @@ class TestMultiInstanceGrammar:
         }
         ''')
         assert tree.data == "process"
+
+
+class TestMessageStartEvent:
+    """Test message start event (start with message property)."""
+
+    def test_start_with_message(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "On Order" {
+                message: "order-placed"
+            }
+            processEntity "Load" { entityName: "Order" }
+            end "Done" {}
+            flow {
+                "on-order" -> "load"
+                "load" -> "done"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        start = p.elements[0]
+        assert isinstance(start, StartEvent)
+        assert start.message == "order-placed"
+        assert start.timer is None
+
+    def test_start_without_message(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "Begin" {}
+            processEntity "Load" { entityName: "Foo" }
+            end "Done" {}
+            flow { "begin" -> "load" "load" -> "done" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        start = p.elements[0]
+        assert start.message is None
+
+    def test_start_with_message_auto_id(self):
+        """Message start event generates kebab-case ID from name."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "Webhook Received" {
+                message: "webhook-event"
+            }
+            processEntity "Load" { entityName: "Foo" }
+            end "Done" {}
+            flow { "webhook-received" -> "load" "load" -> "done" }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        start = p.elements[0]
+        assert start.id == "webhook-received"
+        assert start.message == "webhook-event"
+
+
+class TestReceiveMessageEvent:
+    """Test receiveMessage intermediate catch event parsing."""
+
+    def test_receive_message_basic(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait For Payment" {
+                message: "payment-received"
+                correlationKey: "orderId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "wait-for-payment"
+                "wait-for-payment" -> "e"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        rm = p.elements[2]
+        assert isinstance(rm, ReceiveMessageEvent)
+        assert rm.name == "Wait For Payment"
+        assert rm.id == "wait-for-payment"
+        assert rm.message == "payment-received"
+        assert rm.correlation_key == "orderId"
+
+    def test_receive_message_with_explicit_id(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            receiveMessage "Wait" {
+                id: "my-wait"
+                message: "signal"
+                correlationKey: "processId"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "my-wait"
+                "my-wait" -> "e"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        rm = p.elements[2]
+        assert rm.id == "my-wait"
+        assert rm.message == "signal"
+        assert rm.correlation_key == "processId"
+
+
+class TestBoundaryMessageEvent:
+    """Test onMessage boundary event parsing."""
+
+    def test_on_message_boundary(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Process Order" {
+                type: "order-processor"
+                onMessage "Payment Update" {
+                    message: "payment-status"
+                    correlationKey: "orderId"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "process-order"
+                "process-order" -> "e"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[2]
+        assert isinstance(task, ServiceTask)
+        assert len(task.boundary_events) == 1
+
+        be = task.boundary_events[0]
+        assert isinstance(be, BoundaryMessageEvent)
+        assert be.name == "Payment Update"
+        assert be.id == "payment-update"
+        assert be.message == "payment-status"
+        assert be.correlation_key == "orderId"
+        assert be.attached_to_ref == "process-order"
+        assert be.interrupting is True
+
+    def test_on_message_non_interrupting(self):
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Long Task" {
+                type: "worker"
+                onMessage "Status Check" {
+                    message: "check-status"
+                    correlationKey: "taskId"
+                    interrupting: false
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "long-task"
+                "long-task" -> "e"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        be = p.elements[2].boundary_events[0]
+        assert isinstance(be, BoundaryMessageEvent)
+        assert be.interrupting is False
+
+    def test_mixed_boundary_events_with_message(self):
+        """Service task with timer, error, and message boundary events."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Call API" {
+                type: "api-call"
+                onTimer "Timeout" {
+                    duration: 5m
+                }
+                onError "Error Handler" {
+                    errorCode: "API_ERROR"
+                }
+                onMessage "Cancel Signal" {
+                    message: "cancel-request"
+                    correlationKey: "requestId"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "call-api"
+                "call-api" -> "e"
+            }
+        }
+        '''
+        p = parse_bpm_string(dsl)
+        task = p.elements[2]
+        assert len(task.boundary_events) == 3
+
+        assert isinstance(task.boundary_events[0], BoundaryTimerEvent)
+        assert isinstance(task.boundary_events[1], BoundaryErrorEvent)
+        assert isinstance(task.boundary_events[2], BoundaryMessageEvent)
+        assert task.boundary_events[2].message == "cancel-request"
+        assert task.boundary_events[2].correlation_key == "requestId"
 
 
 class TestXorGatewayRejected:
