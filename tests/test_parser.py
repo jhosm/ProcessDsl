@@ -702,5 +702,25 @@ class TestGateway:
         assert gw.gateway_type == "xor"  # default
 
 
+class TestXorGatewayRejected:
+    """Test that the legacy xorGateway keyword is rejected by the parser."""
+
+    def test_xor_gateway_keyword_rejected(self):
+        """xorGateway is no longer valid syntax and must cause a parse error."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            xorGateway "Check" {
+                when: "x > 0"
+            }
+            end "E" {}
+            flow { "s" -> "check" "check" -> "e" }
+        }
+        '''
+        with pytest.raises(Exception):
+            parse_bpm_string(dsl)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -219,6 +219,84 @@ class TestBPMNGenerator:
         assert 'http://www.omg.org/spec/BPMN/20100524/MODEL' in xml_content
         assert 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"' in xml_content
 
+    def test_parallel_gateway_generation(self):
+        """Test generating BPMN for parallel gateways."""
+        dsl_content = '''
+        process "Parallel Process" {
+            id: "parallel-process"
+
+            start "Begin" {
+                id: "start-1"
+            }
+
+            gateway "Fork" {
+                id: "fork-1"
+                type: parallel
+            }
+
+            scriptCall "Task A" {
+                id: "task-a"
+                script: "doA()"
+                inputVars: ["x"]
+                outputVars: ["a"]
+            }
+
+            scriptCall "Task B" {
+                id: "task-b"
+                script: "doB()"
+                inputVars: ["x"]
+                outputVars: ["b"]
+            }
+
+            gateway "Join" {
+                id: "join-1"
+                type: parallel
+            }
+
+            end "Complete" {
+                id: "end-1"
+            }
+
+            flow {
+                "start-1" -> "fork-1"
+                "fork-1" -> "task-a"
+                "fork-1" -> "task-b"
+                "task-a" -> "join-1"
+                "task-b" -> "join-1"
+                "join-1" -> "end-1"
+            }
+        }
+        '''
+
+        process = parse_bpm_string(dsl_content)
+        generator = BPMNGenerator()
+        xml_content = generator.generate(process)
+
+        root = fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+        bpmn_process = [elem for elem in root if elem.tag.endswith('process')][0]
+
+        # Check for parallel gateways (should be 2: fork and join)
+        parallel_gateways = [elem for elem in bpmn_process if elem.tag.endswith('parallelGateway')]
+        assert len(parallel_gateways) == 2
+
+        fork = next(gw for gw in parallel_gateways if gw.get('id') == 'fork-1')
+        assert fork.get('name') == 'Fork'
+
+        join = next(gw for gw in parallel_gateways if gw.get('id') == 'join-1')
+        assert join.get('name') == 'Join'
+
+        # Parallel gateways should NOT have a default attribute
+        assert fork.get('default') is None
+        assert join.get('default') is None
+
+        # No exclusive gateways should be present
+        exclusive_gateways = [elem for elem in bpmn_process if elem.tag.endswith('exclusiveGateway')]
+        assert len(exclusive_gateways) == 0
+
+        # Verify flows - should have 6 sequence flows
+        flows = [elem for elem in bpmn_process if elem.tag.endswith('sequenceFlow')]
+        assert len(flows) == 6
+
     def test_default_flow_generation(self):
         """Test that default flows are correctly generated in BPMN XML."""
         dsl_content = '''
