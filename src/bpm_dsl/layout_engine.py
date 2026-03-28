@@ -17,7 +17,7 @@ import math
 from .ast_nodes import (
     Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
     Gateway, Flow, TimerEvent, BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
-    ReceiveMessageEvent, BoundaryMessageEvent,
+    ReceiveMessageEvent, BoundaryMessageEvent, Subprocess, CallActivity,
 )
 
 
@@ -72,8 +72,8 @@ class ProcessGraph:
         self.elements = {elem.id: elem for elem in process.elements}
         # Include boundary events so they can participate in flow routing
         for elem in process.elements:
-            if isinstance(elem, ServiceTask) and elem.boundary_events:
-                for be in elem.boundary_events:
+            if isinstance(elem, (ServiceTask, Subprocess)) and hasattr(elem, 'boundary_events'):
+                for be in elem.boundary_events or []:
                     self.elements[be.id] = be
         self.flows = process.flows
         self.adjacency = self._build_adjacency()
@@ -129,6 +129,8 @@ class LayoutConfig:
         BoundaryErrorEvent: {'width': 36, 'height': 36},
         ReceiveMessageEvent: {'width': 36, 'height': 36},
         BoundaryMessageEvent: {'width': 36, 'height': 36},
+        Subprocess: {'width': 140, 'height': 100},
+        CallActivity: {'width': 100, 'height': 80},
     }
     
     SPACING = {
@@ -301,9 +303,9 @@ class BPMNLayoutEngine:
     def _position_boundary_events(self):
         """Position boundary events on the bottom edge of their parent task."""
         for elem_id, element in self.graph.elements.items():
-            if not isinstance(element, ServiceTask):
+            if not isinstance(element, (ServiceTask, Subprocess)):
                 continue
-            if not element.boundary_events:
+            if not getattr(element, 'boundary_events', None):
                 continue
 
             parent_pos = self.positions.get(elem_id)
