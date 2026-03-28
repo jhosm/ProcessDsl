@@ -17,6 +17,7 @@ import math
 from .ast_nodes import (
     Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
     Gateway, Flow, TimerEvent, BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
+    ReceiveMessageEvent, BoundaryMessageEvent,
 )
 
 
@@ -126,6 +127,8 @@ class LayoutConfig:
         Gateway: {'width': 50, 'height': 50},
         BoundaryTimerEvent: {'width': 36, 'height': 36},
         BoundaryErrorEvent: {'width': 36, 'height': 36},
+        ReceiveMessageEvent: {'width': 36, 'height': 36},
+        BoundaryMessageEvent: {'width': 36, 'height': 36},
     }
     
     SPACING = {
