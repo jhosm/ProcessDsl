@@ -6,7 +6,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree, re
 from xml.dom import minidom
 
 from .ast_nodes import (
-    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, XORGateway, 
+    Process, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, 
     Flow, Element as BPMElement
 )
 from .layout_engine import BPMNLayoutEngine, LayoutConfig, Bounds
@@ -122,7 +122,7 @@ class BPMNGenerator:
                 self._add_service_task(parent, element)
             elif isinstance(element, ProcessEntity):
                 self._add_process_entity(parent, element)
-            elif isinstance(element, XORGateway):
+            elif isinstance(element, Gateway):
                 self._add_xor_gateway(parent, element)
     
     def _add_start_event(self, parent: Element, start: StartEvent) -> None:
@@ -286,7 +286,7 @@ class BPMNGenerator:
             'error_end_id': error_end_id
         })
     
-    def _add_xor_gateway(self, parent: Element, gateway: XORGateway) -> None:
+    def _add_xor_gateway(self, parent: Element, gateway: Gateway) -> None:
         """Add an exclusive gateway to the process."""
         xor_gateway = SubElement(parent, "exclusiveGateway")
         xor_gateway.set("id", gateway.id)

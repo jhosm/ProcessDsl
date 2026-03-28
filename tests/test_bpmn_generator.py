@@ -143,7 +143,7 @@ class TestBPMNGenerator:
                 id: "start-1"
             }
             
-            xorGateway "Decision Point" {
+            gateway "Decision Point" {
                 id: "gateway-1"
                 when: "amount > 1000"
             }
@@ -229,22 +229,22 @@ class TestBPMNGenerator:
                 id: "start-1"
             }
             
-            xorGateway "Decision" {
+            gateway "Decision" {
                 id: "gateway-1"
             }
-            
+
             end "Path A" {
                 id: "end-a"
             }
-            
+
             end "Path B" {
                 id: "end-b"
             }
-            
+
             flow {
                 "start-1" -> "gateway-1"
                 "gateway-1" -> "end-a" [when: "condition == true"]
-                "gateway-1" -> "end-b" [default]
+                "gateway-1" -> "end-b" [otherwise]
             }
         }
         '''
