@@ -19,12 +19,14 @@ element: start_element
        | process_entity
        | gateway
        | timer_element
+       | receive_message
 
-// Task 1.4: Extend start element with optional timer property
+// Task 1.4: Extend start element with optional timer or message property
 start_element: "start" STRING "{" start_properties "}"
-start_properties: element_id? start_timer?
+start_properties: element_id? (start_timer | start_message)?
 
 start_timer: "timer:" cycle_expr
+start_message: "message:" STRING
 
 end_element: "end" STRING "{" end_properties "}"
 end_properties: element_id?
@@ -53,6 +55,10 @@ timer_duration: "duration:" duration_value
 timer_date: "date:" STRING
 timer_cycle: "cycle:" cycle_expr
 
+// Message intermediate catch event with message name and correlation key
+receive_message: "receiveMessage" STRING "{" receive_message_properties "}"
+receive_message_properties: element_id? message_name correlation_key
+
 // Task 1.3: cycle() function syntax
 cycle_expr: "cycle(" duration_value ")"
 
@@ -60,7 +66,7 @@ cycle_expr: "cycle(" duration_value ")"
 duration_value: STRING | DURATION_SHORTHAND
 
 // Task 1.5: Boundary event rules (nested inside serviceTask)
-boundary_event: on_timer | on_error
+boundary_event: on_timer | on_error | on_message
 
 on_timer: "onTimer" STRING "{" on_timer_properties "}"
 on_timer_properties: timer_duration boundary_interrupting?
@@ -68,9 +74,16 @@ on_timer_properties: timer_duration boundary_interrupting?
 on_error: "onError" STRING "{" on_error_properties "}"
 on_error_properties: error_code boundary_interrupting?
 
+on_message: "onMessage" STRING "{" on_message_properties "}"
+on_message_properties: message_name correlation_key boundary_interrupting?
+
 // Task 1.6: interrupting and errorCode properties
 boundary_interrupting: "interrupting:" BOOLEAN
 error_code: "errorCode:" STRING
+
+// Shared message properties
+message_name: "message:" STRING
+correlation_key: "correlationKey:" STRING
 
 element_id: "id:" STRING
 script_code: "script:" STRING
