@@ -14,7 +14,10 @@ from dataclasses import dataclass
 from collections import defaultdict, deque
 import math
 
-from .ast_nodes import Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity, Gateway, Flow
+from .ast_nodes import (
+    Process, Element, StartEvent, EndEvent, ScriptCall, ServiceTask, ProcessEntity,
+    Gateway, Flow, TimerEvent, BoundaryEvent, BoundaryTimerEvent, BoundaryErrorEvent,
+)
 
 
 @dataclass
@@ -66,6 +69,11 @@ class ProcessGraph:
     def __init__(self, process: Process):
         self.process = process
         self.elements = {elem.id: elem for elem in process.elements}
+        # Include boundary events so they can participate in flow routing
+        for elem in process.elements:
+            if isinstance(elem, ServiceTask) and elem.boundary_events:
+                for be in elem.boundary_events:
+                    self.elements[be.id] = be
         self.flows = process.flows
         self.adjacency = self._build_adjacency()
         self.reverse_adjacency = self._build_reverse_adjacency()
@@ -111,10 +119,13 @@ class LayoutConfig:
     ELEMENT_DIMENSIONS = {
         StartEvent: {'width': 36, 'height': 36},
         EndEvent: {'width': 36, 'height': 36},
+        TimerEvent: {'width': 36, 'height': 36},
         ScriptCall: {'width': 100, 'height': 80},
         ServiceTask: {'width': 100, 'height': 80},
         ProcessEntity: {'width': 100, 'height': 80},
-        Gateway: {'width': 50, 'height': 50}
+        Gateway: {'width': 50, 'height': 50},
+        BoundaryTimerEvent: {'width': 36, 'height': 36},
+        BoundaryErrorEvent: {'width': 36, 'height': 36},
     }
     
     SPACING = {
@@ -160,8 +171,11 @@ class BPMNLayoutEngine:
         
         # Phase 3: Handle gateway branches
         self._position_gateway_branches()
-        
-        # Phase 4: Calculate edge routes
+
+        # Phase 4: Position boundary events on parent task edges
+        self._position_boundary_events()
+
+        # Phase 5: Calculate edge routes
         self._calculate_edge_routes()
         
         return self.positions, self.edge_routes
@@ -281,6 +295,37 @@ class BPMNLayoutEngine:
                         height=successor_pos.height
                     )
     
+    def _position_boundary_events(self):
+        """Position boundary events on the bottom edge of their parent task."""
+        for elem_id, element in self.graph.elements.items():
+            if not isinstance(element, ServiceTask):
+                continue
+            if not element.boundary_events:
+                continue
+
+            parent_pos = self.positions.get(elem_id)
+            if not parent_pos:
+                continue
+
+            boundary_dims = {'width': 36, 'height': 36}
+            count = len(element.boundary_events)
+
+            # Space boundary events evenly along the bottom edge of the parent
+            # Each is centered vertically on the bottom border
+            available_width = parent_pos.width
+            spacing = available_width / (count + 1)
+
+            for i, boundary in enumerate(element.boundary_events):
+                bx = parent_pos.x + spacing * (i + 1) - boundary_dims['width'] / 2
+                by = parent_pos.bottom - boundary_dims['height'] / 2
+
+                self.positions[boundary.id] = Bounds(
+                    x=bx,
+                    y=by,
+                    width=boundary_dims['width'],
+                    height=boundary_dims['height'],
+                )
+
     def _calculate_edge_routes(self):
         """Calculate routing for all edges."""
         for flow in self.graph.flows:
