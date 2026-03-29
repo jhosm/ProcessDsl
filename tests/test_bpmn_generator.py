@@ -1329,5 +1329,389 @@ class TestEndToEndAsyncWebhook:
         assert len(flows) >= 4
 
 
+class TestSubprocessBPMNGeneration:
+    """Test BPMN generation for embedded subprocesses."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_subprocess_generates_sub_process_element(self):
+        """Subprocess emits a <subProcess> element with nested start, end, and flows."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Prepare" {
+                start "Sub Start" {}
+                end "Sub End" {}
+                flow { "sub-start" -> "sub-end" }
+            }
+            end "E" {}
+            flow {
+                "s" -> "prepare"
+                "prepare" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        subprocesses = [e for e in proc if e.tag.endswith('subProcess')]
+        assert len(subprocesses) == 1
+
+        sub = subprocesses[0]
+        assert sub.get('id') == 'prepare'
+        assert sub.get('name') == 'Prepare'
+
+        # Check nested elements
+        sub_starts = [e for e in sub if e.tag.endswith('startEvent')]
+        sub_ends = [e for e in sub if e.tag.endswith('endEvent')]
+        sub_flows = [e for e in sub if e.tag.endswith('sequenceFlow')]
+        assert len(sub_starts) == 1
+        assert len(sub_ends) == 1
+        assert len(sub_flows) == 1
+
+    def test_subprocess_with_tasks_inside(self):
+        """Subprocess with service tasks generates nested task elements."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Batch" {
+                start "Begin" {}
+                serviceTask "Process Item" {
+                    type: "item-processor"
+                }
+                end "Done" {}
+                flow {
+                    "begin" -> "process-item"
+                    "process-item" -> "done"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "batch"
+                "batch" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        sub = [e for e in proc if e.tag.endswith('subProcess')][0]
+        service_tasks = [e for e in sub if e.tag.endswith('serviceTask')]
+        assert len(service_tasks) == 1
+        assert service_tasks[0].get('id') == 'process-item'
+
+    def test_subprocess_multi_instance_sequential(self):
+        """Subprocess with forEach generates multiInstanceLoopCharacteristics (sequential)."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Batch" {
+                forEach: "items"
+                as: "item"
+                start "Begin" {}
+                end "Done" {}
+                flow { "begin" -> "done" }
+            }
+            end "E" {}
+            flow {
+                "s" -> "batch"
+                "batch" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        sub = [e for e in proc if e.tag.endswith('subProcess')][0]
+
+        mi_elements = [e for e in sub if e.tag.endswith('multiInstanceLoopCharacteristics')]
+        assert len(mi_elements) == 1
+
+        mi = mi_elements[0]
+        assert mi.get('isSequential') == 'true'
+
+        # Zeebe extension: loopCharacteristics with inputCollection
+        ext = [e for e in mi if e.tag.endswith('extensionElements')][0]
+        loop_chars = [e for e in ext if e.tag.endswith('loopCharacteristics')]
+        assert len(loop_chars) == 1
+        assert loop_chars[0].get('inputCollection') == '=items'
+        assert loop_chars[0].get('inputElement') == 'item'
+
+    def test_subprocess_multi_instance_parallel(self):
+        """Subprocess with parallel: true omits isSequential attribute."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Parallel Batch" {
+                forEach: "items"
+                as: "item"
+                parallel: true
+                start "Begin" {}
+                end "Done" {}
+                flow { "begin" -> "done" }
+            }
+            end "E" {}
+            flow {
+                "s" -> "parallel-batch"
+                "parallel-batch" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        sub = [e for e in proc if e.tag.endswith('subProcess')][0]
+        mi = [e for e in sub if e.tag.endswith('multiInstanceLoopCharacteristics')][0]
+        # Parallel multi-instance should NOT have isSequential="true"
+        assert mi.get('isSequential') is None
+
+    def test_subprocess_boundary_events_as_siblings(self):
+        """Boundary events on subprocess are rendered as sibling elements."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            subprocess "Long Task" {
+                start "Begin" {}
+                end "Done" {}
+                flow { "begin" -> "done" }
+                onTimer "Timeout" {
+                    duration: 30m
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "long-task"
+                "long-task" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        # Boundary event should be a sibling of the subprocess, not nested inside
+        boundaries = [e for e in proc if e.tag.endswith('boundaryEvent')]
+        assert len(boundaries) == 1
+        assert boundaries[0].get('attachedToRef') == 'long-task'
+
+        timer_defs = [e for e in boundaries[0] if e.tag.endswith('timerEventDefinition')]
+        assert len(timer_defs) == 1
+
+
+class TestCallActivityBPMNGeneration:
+    """Test BPMN generation for call activities."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_call_activity_generates_call_activity_element(self):
+        """CallActivity emits <callActivity> with zeebe:calledElement."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke Sub" {
+                processId: "sub-process-v1"
+            }
+            end "E" {}
+            flow {
+                "s" -> "invoke-sub"
+                "invoke-sub" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        call_activities = [e for e in proc if e.tag.endswith('callActivity')]
+        assert len(call_activities) == 1
+
+        ca = call_activities[0]
+        assert ca.get('id') == 'invoke-sub'
+        assert ca.get('name') == 'Invoke Sub'
+
+        # Check zeebe:calledElement
+        ext = [e for e in ca if e.tag.endswith('extensionElements')][0]
+        called = [e for e in ext if e.tag.endswith('calledElement')]
+        assert len(called) == 1
+        assert called[0].get('processId') == 'sub-process-v1'
+        assert called[0].get('propagateAllChildVariables') == 'false'
+
+    def test_call_activity_with_io_mappings(self):
+        """CallActivity with input/output mappings emits zeebe:ioMapping."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke Sub" {
+                processId: "sub-process-v1"
+                inputMappings: ["orderId" -> "id", "customerName" -> "name"]
+                outputMappings: ["result" -> "subResult"]
+            }
+            end "E" {}
+            flow {
+                "s" -> "invoke-sub"
+                "invoke-sub" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ca = [e for e in proc if e.tag.endswith('callActivity')][0]
+        ext = [e for e in ca if e.tag.endswith('extensionElements')][0]
+
+        io_mappings = [e for e in ext if e.tag.endswith('ioMapping')]
+        assert len(io_mappings) == 1
+
+        io = io_mappings[0]
+        inputs = [e for e in io if e.tag.endswith('input')]
+        outputs = [e for e in io if e.tag.endswith('output')]
+        assert len(inputs) == 2
+        assert len(outputs) == 1
+
+        # Verify FEEL expression prefix on source
+        assert inputs[0].get('source').startswith('=')
+        assert outputs[0].get('target') == 'subResult'
+
+    def test_call_activity_with_var_shortcuts(self):
+        """CallActivity with inputVars/outputVars generates mappings."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            callActivity "Invoke" {
+                processId: "child-process"
+                inputVars: ["orderId", "amount"]
+                outputVars: ["status"]
+            }
+            end "E" {}
+            flow {
+                "s" -> "invoke"
+                "invoke" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        ca = [e for e in proc if e.tag.endswith('callActivity')][0]
+        ext = [e for e in ca if e.tag.endswith('extensionElements')][0]
+
+        io_mappings = [e for e in ext if e.tag.endswith('ioMapping')]
+        assert len(io_mappings) == 1
+
+        io = io_mappings[0]
+        inputs = [e for e in io if e.tag.endswith('input')]
+        outputs = [e for e in io if e.tag.endswith('output')]
+        assert len(inputs) == 2
+        assert len(outputs) == 1
+
+
+class TestMultiInstanceBPMNGeneration:
+    """Test BPMN generation for multi-instance on service tasks."""
+
+    def _parse_and_generate(self, dsl: str) -> str:
+        process = parse_bpm_string(dsl)
+        generator = BPMNGenerator()
+        return generator.generate(process)
+
+    def _xml_root(self, xml_content: str):
+        return fromstring(f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_content}')
+
+    def _bpmn_process(self, root):
+        return [elem for elem in root if elem.tag.endswith('process')][0]
+
+    def test_service_task_multi_instance(self):
+        """ServiceTask with forEach generates multiInstanceLoopCharacteristics."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Send Emails" {
+                type: "email-sender"
+                forEach: "recipients"
+                as: "recipient"
+            }
+            end "E" {}
+            flow {
+                "s" -> "send-emails"
+                "send-emails" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        task = [e for e in proc if e.tag.endswith('serviceTask')][0]
+        mi_elements = [e for e in task if e.tag.endswith('multiInstanceLoopCharacteristics')]
+        assert len(mi_elements) == 1
+
+        mi = mi_elements[0]
+        assert mi.get('isSequential') == 'true'
+
+        ext = [e for e in mi if e.tag.endswith('extensionElements')][0]
+        loop_chars = [e for e in ext if e.tag.endswith('loopCharacteristics')]
+        assert loop_chars[0].get('inputCollection') == '=recipients'
+        assert loop_chars[0].get('inputElement') == 'recipient'
+
+    def test_service_task_multi_instance_parallel(self):
+        """ServiceTask with parallel: true omits isSequential."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            serviceTask "Send Emails" {
+                type: "email-sender"
+                forEach: "recipients"
+                as: "recipient"
+                parallel: true
+            }
+            end "E" {}
+            flow {
+                "s" -> "send-emails"
+                "send-emails" -> "e"
+            }
+        }
+        '''
+        xml = self._parse_and_generate(dsl)
+        root = self._xml_root(xml)
+        proc = self._bpmn_process(root)
+
+        task = [e for e in proc if e.tag.endswith('serviceTask')][0]
+        mi = [e for e in task if e.tag.endswith('multiInstanceLoopCharacteristics')][0]
+        assert mi.get('isSequential') is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

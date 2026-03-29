@@ -763,5 +763,376 @@ class TestISO8601Validation:
         assert not v._is_valid_iso8601_cycle("")
 
 
+class TestSubprocessValidation:
+    """Validator rules for embedded subprocesses."""
+
+    def setup_method(self):
+        self.validator = ProcessValidator()
+
+    def _make_process(self, dsl: str):
+        return parse_bpm_string(dsl)
+
+    def test_valid_subprocess(self):
+        """A subprocess with start, end, and valid internal flow passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            subprocess "Prepare" {
+                start "Sub Start" {}
+                serviceTask "Do Work" {
+                    type: "worker"
+                }
+                end "Sub End" {}
+                flow {
+                    "sub-start" -> "do-work"
+                    "do-work" -> "sub-end"
+                }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "prepare"
+                "prepare" -> "e"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    def test_subprocess_empty_body(self):
+        """A subprocess with no elements fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(name="Empty", id="empty", elements=[], flows=[]),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="empty"),
+                Flow(source_id="empty", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("must contain at least one element" in e for e in result.errors)
+
+    def test_subprocess_missing_start_event(self):
+        """A subprocess without a start event fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, ServiceTask, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(
+                    name="Bad", id="bad",
+                    elements=[
+                        ServiceTask(name="Task", id="task", task_type="worker"),
+                        EndEvent(name="Sub End", id="sub-end"),
+                    ],
+                    flows=[Flow(source_id="task", target_id="sub-end")],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="bad"),
+                Flow(source_id="bad", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("must have at least one start event" in e for e in result.errors)
+
+    def test_subprocess_missing_end_event(self):
+        """A subprocess without an end event fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, ServiceTask, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(
+                    name="Bad", id="bad",
+                    elements=[
+                        StartEvent(name="Sub Start", id="sub-start"),
+                        ServiceTask(name="Task", id="task", task_type="worker"),
+                    ],
+                    flows=[Flow(source_id="sub-start", target_id="task")],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="bad"),
+                Flow(source_id="bad", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("must have at least one end event" in e for e in result.errors)
+
+    def test_subprocess_duplicate_id_across_boundary(self):
+        """An element ID inside a subprocess that duplicates a top-level ID fails."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(
+                    name="Sub", id="sub",
+                    elements=[
+                        StartEvent(name="Sub Start", id="s"),  # duplicates top-level "s"
+                        EndEvent(name="Sub End", id="sub-end"),
+                    ],
+                    flows=[Flow(source_id="s", target_id="sub-end")],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="sub"),
+                Flow(source_id="sub", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("Duplicate" in e and "subprocess boundary" in e for e in result.errors)
+
+    def test_subprocess_flow_references_nonexistent_element(self):
+        """A flow inside a subprocess referencing a non-existent element fails."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(
+                    name="Sub", id="sub",
+                    elements=[
+                        StartEvent(name="Sub Start", id="sub-start"),
+                        EndEvent(name="Sub End", id="sub-end"),
+                    ],
+                    flows=[Flow(source_id="sub-start", target_id="missing")],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="sub"),
+                Flow(source_id="sub", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("non-existent" in e for e in result.errors)
+
+
+class TestCallActivityValidation:
+    """Validator rules for call activities."""
+
+    def setup_method(self):
+        self.validator = ProcessValidator()
+
+    def _make_process(self, dsl: str):
+        return parse_bpm_string(dsl)
+
+    def test_valid_call_activity(self):
+        """A call activity with a non-empty processId passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            callActivity "Invoke Sub" {
+                processId: "sub-process-v1"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "invoke-sub"
+                "invoke-sub" -> "e"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    def test_call_activity_empty_process_id(self):
+        """A call activity with empty processId fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, CallActivity, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                CallActivity(name="Bad Call", id="bad-call", process_id=""),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="bad-call"),
+                Flow(source_id="bad-call", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("non-empty processId" in e for e in result.errors)
+
+    def test_call_activity_with_mappings_valid(self):
+        """A call activity with input/output mappings passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            callActivity "Invoke" {
+                processId: "child"
+                inputMappings: ["orderId" -> "id"]
+                outputMappings: ["result" -> "childResult"]
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "invoke"
+                "invoke" -> "e"
+            }
+        }
+        '''
+        result = self.validator.validate(self._make_process(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+
+class TestMultiInstanceValidation:
+    """Validator rules for multi-instance (forEach) on service tasks and subprocesses."""
+
+    def setup_method(self):
+        self.validator = ProcessValidator()
+
+    def test_service_task_foreach_with_as_valid(self):
+        """A service task with forEach + as passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            serviceTask "Send" {
+                type: "email-sender"
+                forEach: "recipients"
+                as: "recipient"
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "send"
+                "send" -> "e"
+            }
+        }
+        '''
+        result = ProcessValidator().validate(parse_bpm_string(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+    def test_service_task_foreach_missing_as(self):
+        """A service task with forEach but no as variable fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, ServiceTask, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                ServiceTask(
+                    name="Send", id="send", task_type="email-sender",
+                    for_each="recipients", as_var=None,
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="send"),
+                Flow(source_id="send", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("forEach" in e and "as" in e for e in result.errors)
+
+    def test_subprocess_foreach_missing_as(self):
+        """A subprocess with forEach but no as variable fails validation."""
+        from bpm_dsl.ast_nodes import (
+            Process, StartEvent, EndEvent, Subprocess, Flow,
+        )
+
+        process = Process(
+            name="T", id="t",
+            elements=[
+                StartEvent(name="S", id="s"),
+                Subprocess(
+                    name="Batch", id="batch",
+                    for_each="items", as_var=None,
+                    elements=[
+                        StartEvent(name="Sub Start", id="sub-start"),
+                        EndEvent(name="Sub End", id="sub-end"),
+                    ],
+                    flows=[Flow(source_id="sub-start", target_id="sub-end")],
+                ),
+                EndEvent(name="E", id="e"),
+            ],
+            flows=[
+                Flow(source_id="s", target_id="batch"),
+                Flow(source_id="batch", target_id="e"),
+            ],
+        )
+
+        result = self.validator.validate(process)
+        assert not result.is_valid
+        assert any("forEach" in e and "as" in e for e in result.errors)
+
+    def test_subprocess_foreach_with_as_valid(self):
+        """A subprocess with forEach + as passes validation."""
+        dsl = '''
+        process "T" {
+            id: "t"
+            start "S" {}
+            processEntity "Load" { entityName: "Foo" }
+            subprocess "Batch" {
+                forEach: "orders"
+                as: "order"
+                start "Begin" {}
+                end "Done" {}
+                flow { "begin" -> "done" }
+            }
+            end "E" {}
+            flow {
+                "s" -> "load"
+                "load" -> "batch"
+                "batch" -> "e"
+            }
+        }
+        '''
+        result = ProcessValidator().validate(parse_bpm_string(dsl))
+        assert result.is_valid, f"Expected valid, got errors: {result.errors}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
